@@ -29,12 +29,9 @@ import com.graphhopper.config.Profile;
 import com.graphhopper.gtfs.*;
 import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.util.PMap;
-import io.dropwizard.lifecycle.Managed;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
-import org.glassfish.hk2.api.Factory;
 
-import jakarta.inject.Inject;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.EnumSet;
@@ -45,7 +42,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-public class RealtimeFeedLoadingCache implements Factory<RealtimeFeed>, Managed {
+/**
+ * Keeps the realtime feeds, fetched again a minute after they were last fetched. Started and stopped with the application.
+ */
+public class RealtimeFeedLoadingCache {
 
     private final HttpClient httpClient;
     private final GraphHopperGtfs graphHopper;
@@ -54,14 +54,12 @@ public class RealtimeFeedLoadingCache implements Factory<RealtimeFeed>, Managed 
     private LoadingCache<String, RealtimeFeed> cache;
     private Map<String, Transfers> transfers;
 
-    @Inject
-    RealtimeFeedLoadingCache(GraphHopperGtfs graphHopper, HttpClient httpClient, GraphHopperBundleConfiguration bundleConfiguration) {
+    public RealtimeFeedLoadingCache(GraphHopperGtfs graphHopper, HttpClient httpClient, GraphHopperBundleConfiguration bundleConfiguration) {
         this.graphHopper = graphHopper;
         this.bundleConfiguration = bundleConfiguration;
         this.httpClient = httpClient;
     }
 
-    @Override
     public void start() {
         this.transfers = new HashMap<>();
         for (Map.Entry<String, GTFSFeed> entry : this.graphHopper.getGtfsStorage().getGtfsFeeds().entrySet()) {
@@ -85,7 +83,6 @@ public class RealtimeFeedLoadingCache implements Factory<RealtimeFeed>, Managed 
                 });
     }
 
-    @Override
     public RealtimeFeed provide() {
         try {
             return cache.get("pups");
@@ -95,13 +92,8 @@ public class RealtimeFeedLoadingCache implements Factory<RealtimeFeed>, Managed 
         }
     }
 
-    @Override
-    public void dispose(RealtimeFeed instance) {
-        this.executor.shutdown();
-    }
-
-    @Override
     public void stop() {
+        this.executor.shutdown();
     }
 
     private RealtimeFeed fetchFeedsAndCreateGraph() {

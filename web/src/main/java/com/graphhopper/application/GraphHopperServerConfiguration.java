@@ -17,15 +17,22 @@
  */
 package com.graphhopper.application;
 
+import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.graphhopper.GraphHopperConfig;
 import com.graphhopper.http.GraphHopperBundleConfiguration;
 import com.graphhopper.http.RealtimeConfiguration;
-import io.dropwizard.core.Configuration;
 
 import jakarta.validation.constraints.NotNull;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-public class GraphHopperServerConfiguration extends Configuration implements GraphHopperBundleConfiguration {
+/**
+ * The configuration file of the server. The graphhopper and gtfs_realtime sections configure GraphHopper, all other
+ * sections are settings of the web server, like server.port, management.server.port or logging.level.root.
+ */
+public class GraphHopperServerConfiguration implements GraphHopperBundleConfiguration {
 
     @NotNull
     @JsonProperty
@@ -33,6 +40,8 @@ public class GraphHopperServerConfiguration extends Configuration implements Gra
 
     @JsonProperty
     private final RealtimeConfiguration gtfsRealtime = new RealtimeConfiguration();
+
+    private final Map<String, Object> serverProperties = new LinkedHashMap<>();
 
     public GraphHopperServerConfiguration() {
     }
@@ -45,5 +54,28 @@ public class GraphHopperServerConfiguration extends Configuration implements Gra
     @Override
     public RealtimeConfiguration gtfsrealtime() {
         return gtfsRealtime;
+    }
+
+    @JsonAnySetter
+    public void setServerProperty(String name, JsonNode value) {
+        flatten(name, value, serverProperties);
+    }
+
+    /**
+     * @return the settings of the web server, with flat names like "server.port"
+     */
+    public Map<String, Object> getServerProperties() {
+        return serverProperties;
+    }
+
+    private static void flatten(String name, JsonNode value, Map<String, Object> result) {
+        if (value.isObject()) {
+            value.properties().forEach(e -> flatten(name + "." + e.getKey(), e.getValue(), result));
+        } else if (value.isArray()) {
+            for (int i = 0; i < value.size(); i++)
+                flatten(name + "[" + i + "]", value.get(i), result);
+        } else if (!value.isNull()) {
+            result.put(name, value.asText());
+        }
     }
 }

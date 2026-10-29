@@ -27,15 +27,14 @@ import com.graphhopper.util.Parameters;
 import com.graphhopper.util.StopWatch;
 import com.graphhopper.util.TranslationMap;
 import com.graphhopper.util.shapes.GHPoint;
-import jakarta.inject.Inject;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotNull;
-import jakarta.ws.rs.*;
-import jakarta.ws.rs.container.ContainerRequestContext;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.UriInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,7 +55,8 @@ import static com.graphhopper.util.Parameters.Routing.*;
  *
  * @author Robin Boldt
  */
-@Path("navigate")
+@RestController
+@RequestMapping("/navigate")
 public class NavigateResource {
 
     private static final Logger logger = LoggerFactory.getLogger(NavigateResource.class);
@@ -65,7 +65,6 @@ public class NavigateResource {
     private final TranslationMap translationMap;
     private final Map<String, String> resolverMap;
 
-    @Inject
     public NavigateResource(GraphHopper graphHopper, TranslationMap translationMap, GraphHopperConfig config) {
         this.graphHopper = graphHopper;
         resolverMap = config.asPMap().getObject("profiles_mapbox", new HashMap<>());
@@ -79,25 +78,30 @@ public class NavigateResource {
         this.translationMap = translationMap;
     }
 
-    @GET
-    @Path("/directions/v5/gh/{profile}/{coordinatesArray : .+}")
-    @Produces({MediaType.APPLICATION_JSON})
-    public Response doGet(
-            @Context HttpServletRequest httpReq,
-            @Context UriInfo uriInfo,
-            @Context ContainerRequestContext rc,
-            @QueryParam("steps") @DefaultValue("false") boolean enableInstructions,
-            @QueryParam("voice_instructions") @DefaultValue("false") boolean voiceInstructions,
-            @QueryParam("banner_instructions") @DefaultValue("false") boolean bannerInstructions,
-            @QueryParam("roundabout_exits") @DefaultValue("false") boolean roundaboutExits,
-            @QueryParam("voice_units") @DefaultValue("metric") String voiceUnits,
-            @QueryParam("overview") @DefaultValue("simplified") String overview,
-            @QueryParam("geometries") @DefaultValue("polyline") String geometries,
-            @QueryParam("bearings") @DefaultValue("") String bearings,
-            @QueryParam("language") @DefaultValue("en") String localeStr,
-            @PathParam("profile") String mapboxProfile) {
+    @GetMapping(value = "/directions/v5/gh/{profile}/{*coordinatesArray}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> doGet(
+            HttpServletRequest httpReq,
+            @PathVariable("coordinatesArray") String coordinatesArray,
+            @RequestParam(name = "steps", defaultValue = "false") boolean enableInstructions,
+            @RequestParam(name = "voice_instructions", defaultValue = "false") boolean voiceInstructions,
+            @RequestParam(name = "banner_instructions", defaultValue = "false") boolean bannerInstructions,
+            @RequestParam(name = "roundabout_exits", defaultValue = "false") boolean roundaboutExits,
+            @RequestParam(name = "voice_units", required = false) String voiceUnits,
+            @RequestParam(name = "overview", required = false) String overview,
+            @RequestParam(name = "geometries", required = false) String geometries,
+            @RequestParam(name = "bearings", required = false) String bearings,
+            @RequestParam(name = "language", required = false) String localeStr,
+            @PathVariable("profile") String mapboxProfile) {
 
         StopWatch sw = new StopWatch().start();
+        // the coordinates are required, like the profile
+        if (coordinatesArray.isEmpty() || coordinatesArray.equals("/"))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        voiceUnits = voiceUnits == null ? "metric" : voiceUnits;
+        overview = overview == null ? "simplified" : overview;
+        geometries = geometries == null ? "polyline" : geometries;
+        bearings = bearings == null ? "" : bearings;
+        localeStr = localeStr == null ? "en" : localeStr;
 
         // Make sure the client does not receive an unexpected answer as the NavigateResponseConverter is limited
         if (!geometries.equals("polyline6"))
@@ -143,24 +147,22 @@ public class NavigateResource {
         if (ghResponse.hasErrors()) {
             logger.error(logStr + ", errors:" + ghResponse.getErrors());
             // Mapbox specifies 422 return type for input errors
-            return Response.status(422).entity(NavigateResponseConverter.convertFromGHResponseError(ghResponse)).
+            return ResponseEntity.status(422).
                     header("X-GH-Took", "" + Math.round(took * 1000)).
-                    build();
+                    body(NavigateResponseConverter.convertFromGHResponseError(ghResponse));
         } else {
             DistanceUtils.Unit unit = voiceUnits.equals("metric") ? DistanceUtils.Unit.METRIC : DistanceUtils.Unit.IMPERIAL;
             Locale locale = Helper.getLocale(localeStr);
             DistanceConfig config = new DistanceConfig(unit, translationMap, locale, graphHopper.getInstructionsBaseMode(ghProfile));
             logger.info(logStr);
-            return Response.ok(NavigateResponseConverter.convertFromGHResponse(ghResponse, translationMap, locale, config)).
+            return ResponseEntity.ok().
                     header("X-GH-Took", "" + Math.round(took * 1000)).
-                    build();
+                    body(NavigateResponseConverter.convertFromGHResponse(ghResponse, translationMap, locale, config));
         }
     }
 
-    @POST
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
-    public Response doPost(@NotNull GHRequest request, @Context HttpServletRequest httpReq) {
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> doPost(@RequestBody(required = false) @NotNull GHRequest request, HttpServletRequest httpReq) {
         StopWatch sw = new StopWatch().start();
 
         // do not use routing.snap_preventions_default here as they are not always good for navigation
@@ -208,10 +210,10 @@ public class NavigateResource {
 
         if (ghResponse.hasErrors()) {
             logger.error(logStr + ", errors:" + ghResponse.getErrors());
-            // TODO Mapbox specifies 422 return type for input errors
-            return Response.status(422).entity(NavigateResponseConverter.convertFromGHResponseError(ghResponse)).
+            // Mapbox answers input errors with 422
+            return ResponseEntity.status(422).
                     header("X-GH-Took", "" + Math.round(took * 1000)).
-                    build();
+                    body(NavigateResponseConverter.convertFromGHResponseError(ghResponse));
         } else {
             DistanceUtils.Unit unit;
             if (request.getHints().getString("voice_units", "metric").equals("metric")) {
@@ -222,9 +224,9 @@ public class NavigateResource {
 
             DistanceConfig config = new DistanceConfig(unit, translationMap, request.getLocale(), graphHopper.getInstructionsBaseMode(request.getProfile()));
             logger.info(logStr);
-            return Response.ok(NavigateResponseConverter.convertFromGHResponse(ghResponse, translationMap, request.getLocale(), config)).
+            return ResponseEntity.ok().
                     header("X-GH-Took", "" + Math.round(took * 1000)).
-                    build();
+                    body(NavigateResponseConverter.convertFromGHResponse(ghResponse, translationMap, request.getLocale(), config));
         }
     }
 

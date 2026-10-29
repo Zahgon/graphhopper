@@ -17,6 +17,8 @@
  */
 package com.graphhopper.application.resources;
 
+import com.graphhopper.application.util.GraphHopperAppExtension;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import com.graphhopper.GHRequest;
 import com.graphhopper.GHResponse;
 import com.graphhopper.ResponsePath;
@@ -32,12 +34,9 @@ import com.graphhopper.util.details.PathDetail;
 import com.graphhopper.util.exceptions.PointNotFoundException;
 import com.graphhopper.util.exceptions.PointOutOfBoundsException;
 import com.graphhopper.util.shapes.GHPoint;
-import io.dropwizard.testing.junit5.DropwizardAppExtension;
-import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -52,10 +51,10 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * @author Peter Karich
  */
-@ExtendWith(DropwizardExtensionsSupport.class)
 public class RouteResourceClientHCTest {
     private static final String DIR = "./target/andorra-gh/";
-    private static final DropwizardAppExtension<GraphHopperServerConfiguration> app = new DropwizardAppExtension<>(GraphHopperApplication.class, createConfig());
+    @RegisterExtension
+    static final GraphHopperAppExtension app = new GraphHopperAppExtension(createConfig());
 
     private static GraphHopperServerConfiguration createConfig() {
         GraphHopperServerConfiguration config = new GraphHopperServerTestConfiguration();
@@ -78,7 +77,7 @@ public class RouteResourceClientHCTest {
         return config;
     }
 
-    // dropwizard extension does not work with @RunWith(Parameterized.class), but we can use an @EnumSource or similar
+    // the server extension does not work with @RunWith(Parameterized.class), but we can use an @EnumSource or similar
     // and on each test method. see https://github.com/graphhopper/graphhopper/pull/2003
     private enum TestParam {
         GET(false, -1),

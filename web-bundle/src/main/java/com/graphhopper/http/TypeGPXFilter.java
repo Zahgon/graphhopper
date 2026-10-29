@@ -15,25 +15,51 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-
 package com.graphhopper.http;
 
-import jakarta.annotation.Priority;
-import jakarta.ws.rs.Priorities;
-import jakarta.ws.rs.container.ContainerRequestContext;
-import jakarta.ws.rs.container.ContainerRequestFilter;
-import jakarta.ws.rs.container.PreMatching;
-import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.filter.OncePerRequestFilter;
 
-@PreMatching
-@Priority(Priorities.HEADER_DECORATOR)
-public class TypeGPXFilter implements ContainerRequestFilter {
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.List;
+
+/**
+ * If the "?type=gpx" parameter is present, sets a corresponding media type header
+ */
+public class TypeGPXFilter extends OncePerRequestFilter {
 
     @Override
-    public void filter(ContainerRequestContext rc) {
-        String maybeType = rc.getUriInfo().getQueryParameters().getFirst("type");
-        if (maybeType != null && maybeType.equals("gpx")) {
-            rc.getHeaders().putSingle(HttpHeaders.ACCEPT, "application/gpx+xml");
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
+        List<String> maybeType = QueryParameters.parse(request.getQueryString()).get("type");
+        if (maybeType != null && maybeType.get(0).equals("gpx")) {
+            chain.doFilter(new HttpServletRequestWrapper(request) {
+                @Override
+                public String getHeader(String name) {
+                    return HttpHeaders.ACCEPT.equalsIgnoreCase(name) ? "application/gpx+xml" : super.getHeader(name);
+                }
+
+                @Override
+                public Enumeration<String> getHeaders(String name) {
+                    return HttpHeaders.ACCEPT.equalsIgnoreCase(name) ? Collections.enumeration(List.of("application/gpx+xml")) : super.getHeaders(name);
+                }
+
+                @Override
+                public Enumeration<String> getHeaderNames() {
+                    List<String> names = Collections.list(super.getHeaderNames());
+                    if (names.stream().noneMatch(HttpHeaders.ACCEPT::equalsIgnoreCase))
+                        names.add(HttpHeaders.ACCEPT);
+                    return Collections.enumeration(names);
+                }
+            }, response);
+        } else {
+            chain.doFilter(request, response);
         }
     }
 }

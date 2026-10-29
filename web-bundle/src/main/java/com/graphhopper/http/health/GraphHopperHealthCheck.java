@@ -18,7 +18,6 @@
 
 package com.graphhopper.http.health;
 
-import com.codahale.metrics.health.HealthCheck;
 import com.graphhopper.GraphHopper;
 
 public class GraphHopperHealthCheck extends HealthCheck {

@@ -17,6 +17,10 @@
  */
 package com.graphhopper.application.resources;
 
+import com.graphhopper.application.util.GraphHopperAppExtension;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import com.graphhopper.application.util.ClientResponse;
+import com.graphhopper.application.util.Entity;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.graphhopper.GHRequest;
 import com.graphhopper.GHResponse;
@@ -38,15 +42,9 @@ import com.graphhopper.util.Parameters;
 import com.graphhopper.util.details.PathDetail;
 import com.graphhopper.util.exceptions.PointOutOfBoundsException;
 import com.graphhopper.util.shapes.GHPoint;
-import io.dropwizard.testing.junit5.DropwizardAppExtension;
-import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
-import jakarta.ws.rs.client.Entity;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -64,11 +62,11 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * @author Peter Karich
  */
-@ExtendWith(DropwizardExtensionsSupport.class)
 public class RouteResourceTest {
 
     private static final String DIR = "./target/andorra-gh/";
-    private static final DropwizardAppExtension<GraphHopperServerConfiguration> app = new DropwizardAppExtension<>(GraphHopperApplication.class, createConfig());
+    @RegisterExtension
+    static final GraphHopperAppExtension app = new GraphHopperAppExtension(createConfig());
 
     private static GraphHopperServerConfiguration createConfig() {
         GraphHopperServerConfiguration config = new GraphHopperServerTestConfiguration();
@@ -149,7 +147,7 @@ public class RouteResourceTest {
     @Test
     public void testAcceptOnlyXmlButNoTypeParam() {
         JsonNode json = clientTarget(app, "/route?profile=my_car&point=42.554851,1.536198&point=42.510071,1.548128")
-                .request(MediaType.APPLICATION_XML).get(JsonNode.class);
+                .request("application/xml").get(JsonNode.class);
         JsonNode infoJson = json.get("info");
         assertFalse(infoJson.has("errors"));
     }
@@ -571,7 +569,7 @@ public class RouteResourceTest {
 
     @Test
     public void testGPXWithError() {
-        try (Response response = clientTarget(app, "/route?profile=my_car&" +
+        try (ClientResponse response = clientTarget(app, "/route?profile=my_car&" +
                 "point=42.554851,1.536198&type=gpx").request().get()) {
             assertEquals(400, response.getStatus());
             String str = response.readEntity(String.class);

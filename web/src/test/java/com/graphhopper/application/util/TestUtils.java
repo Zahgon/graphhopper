@@ -17,11 +17,6 @@
  */
 package com.graphhopper.application.util;
 
-import io.dropwizard.core.Configuration;
-import io.dropwizard.testing.junit5.DropwizardAppExtension;
-
-import jakarta.ws.rs.client.WebTarget;
-
 /**
  * @author thomas aulinger
  */
@@ -29,12 +24,12 @@ public class TestUtils {
     private TestUtils() {
     }
 
-    public static WebTarget clientTarget(DropwizardAppExtension<? extends Configuration> app, String path) {
+    public static ClientTarget clientTarget(GraphHopperAppExtension app, String path) {
         path = prefixPathWithSlash(path);
-        return app.client().target(clientUrl(app, path));
+        return new ClientTarget(clientUrl(app, path));
     }
 
-    public static String clientUrl(DropwizardAppExtension<? extends Configuration> app, String path) {
+    public static String clientUrl(GraphHopperAppExtension app, String path) {
         path = prefixPathWithSlash(path);
         return "http://localhost:" + app.getLocalPort() + path;
     }

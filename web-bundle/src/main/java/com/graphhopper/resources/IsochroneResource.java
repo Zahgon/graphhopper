@@ -7,6 +7,7 @@ import com.graphhopper.GraphHopperConfig;
 import com.graphhopper.config.Profile;
 import com.graphhopper.http.GHPointParam;
 import com.graphhopper.http.ProfileResolver;
+import com.graphhopper.http.QueryParameters;
 import com.graphhopper.isochrone.algorithm.ContourBuilder;
 import com.graphhopper.isochrone.algorithm.ShortestPathTree;
 import com.graphhopper.isochrone.algorithm.Triangulator;
@@ -25,13 +26,15 @@ import org.locationtech.jts.geom.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import jakarta.inject.Inject;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotNull;
-import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.UriInfo;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.OptionalInt;
@@ -43,7 +46,8 @@ import static com.graphhopper.resources.RouteResource.removeLegacyParameters;
 import static com.graphhopper.routing.util.TraversalMode.EDGE_BASED;
 import static com.graphhopper.routing.util.TraversalMode.NODE_BASED;
 
-@Path("isochrone")
+@RestController
+@RequestMapping("/isochrone")
 public class IsochroneResource {
 
     private static final Logger logger = LoggerFactory.getLogger(IsochroneResource.class);
@@ -54,7 +58,6 @@ public class IsochroneResource {
     private final ProfileResolver profileResolver;
     private final String osmDate;
 
-    @Inject
     public IsochroneResource(GraphHopperConfig config, GraphHopper graphHopper, Triangulator triangulator, ProfileResolver profileResolver) {
         this.config = config;
         this.graphHopper = graphHopper;
@@ -65,23 +68,27 @@ public class IsochroneResource {
 
     public enum ResponseType {json, geojson}
 
-    @GET
-    @Produces(MediaType.APPLICATION_JSON)
-    public Response doGet(
-            @Context UriInfo uriInfo,
-            @QueryParam("profile") String profileName,
-            @QueryParam("buckets") @Range(min = 1, max = 20) @DefaultValue("1") OptionalInt nBuckets,
-            @QueryParam("reverse_flow") @DefaultValue("false") boolean reverseFlow,
-            @QueryParam("point") @NotNull GHPointParam point,
-            @QueryParam("time_limit") @DefaultValue("600") OptionalLong timeLimitInSeconds,
-            @QueryParam("distance_limit") @DefaultValue("-1") OptionalLong distanceLimitInMeter,
-            @QueryParam("weight_limit") @DefaultValue("-1") OptionalLong weightLimit,
-            @QueryParam("type") @DefaultValue("json") ResponseType respType,
-            @QueryParam("tolerance") @DefaultValue("0") double toleranceInMeter,
-            @QueryParam("full_geometry") @DefaultValue("false") boolean fullGeometry) {
+    @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ObjectNode> doGet(
+            HttpServletRequest httpReq,
+            @RequestParam(name = "profile", required = false) String profileName,
+            @RequestParam(name = "buckets", required = false) @Range(min = 1, max = 20) OptionalInt nBuckets,
+            @RequestParam(name = "reverse_flow", defaultValue = "false") boolean reverseFlow,
+            @RequestParam(name = "point", required = false) @NotNull GHPointParam point,
+            @RequestParam(name = "time_limit", required = false) OptionalLong timeLimitInSeconds,
+            @RequestParam(name = "distance_limit", required = false) OptionalLong distanceLimitInMeter,
+            @RequestParam(name = "weight_limit", required = false) OptionalLong weightLimit,
+            @RequestParam(name = "type", required = false) ResponseType respType,
+            @RequestParam(name = "tolerance", defaultValue = "0") double toleranceInMeter,
+            @RequestParam(name = "full_geometry", defaultValue = "false") boolean fullGeometry) {
         StopWatch sw = new StopWatch().start();
+        nBuckets = nBuckets == null ? OptionalInt.of(1) : nBuckets;
+        timeLimitInSeconds = timeLimitInSeconds == null ? OptionalLong.of(600) : timeLimitInSeconds;
+        distanceLimitInMeter = distanceLimitInMeter == null ? OptionalLong.of(-1) : distanceLimitInMeter;
+        weightLimit = weightLimit == null ? OptionalLong.of(-1) : weightLimit;
+        respType = respType == null ? ResponseType.json : respType;
         PMap hintsMap = new PMap();
-        RouteResource.initHints(hintsMap, uriInfo.getQueryParameters());
+        RouteResource.initHints(hintsMap, QueryParameters.parse(httpReq.getQueryString()));
         hintsMap.putObject(Parameters.CH.DISABLE, true);
         hintsMap.putObject(Parameters.Landmark.DISABLE, true);
 
@@ -169,8 +176,8 @@ public class IsochroneResource {
         }
 
         logger.info("took: " + sw.getSeconds() + ", visited nodes:" + shortestPathTree.getVisitedNodes());
-        return Response.ok(finalJson).header("X-GH-Took", "" + sw.getSeconds() * 1000).
-                build();
+        return ResponseEntity.ok().header("X-GH-Took", "" + sw.getSeconds() * 1000).
+                body(finalJson);
     }
 
     private Polygon heuristicallyFindMainConnectedComponent(MultiPolygon multiPolygon, Point point) {

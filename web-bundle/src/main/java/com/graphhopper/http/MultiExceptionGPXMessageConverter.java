@@ -22,11 +22,11 @@ import com.graphhopper.jackson.MultiException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.MultivaluedMap;
-import jakarta.ws.rs.ext.MessageBodyWriter;
-import jakarta.ws.rs.ext.Provider;
+import org.springframework.http.HttpInputMessage;
+import org.springframework.http.HttpOutputMessage;
+import org.springframework.http.MediaType;
+import org.springframework.http.converter.AbstractHttpMessageConverter;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -35,26 +35,36 @@ import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-import java.io.OutputStream;
-import java.lang.annotation.Annotation;
-import java.lang.reflect.Type;
+import java.io.IOException;
 
-@Provider
-@Produces("application/gpx+xml")
-public class MultiExceptionGPXMessageBodyWriter implements MessageBodyWriter<MultiException> {
+/**
+ * Writes the errors of a request that asked for GPX as a GPX document.
+ */
+public class MultiExceptionGPXMessageConverter extends AbstractHttpMessageConverter<MultiException> {
 
-    @Override
-    public boolean isWriteable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
-        return true;
+    public static final MediaType GPX = MediaType.parseMediaType("application/gpx+xml");
+
+    public MultiExceptionGPXMessageConverter() {
+        super(GPX);
     }
 
     @Override
-    public long getSize(MultiException e, Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
-        return -1;
+    protected boolean supports(Class<?> clazz) {
+        return MultiException.class.isAssignableFrom(clazz);
     }
 
     @Override
-    public void writeTo(MultiException e, Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType, MultivaluedMap<String, Object> httpHeaders, OutputStream entityStream) {
+    protected boolean canRead(MediaType mediaType) {
+        return false;
+    }
+
+    @Override
+    protected MultiException readInternal(Class<? extends MultiException> clazz, HttpInputMessage inputMessage) {
+        throw new HttpMessageNotReadableException("GPX errors cannot be read", inputMessage);
+    }
+
+    @Override
+    protected void writeInternal(MultiException e, HttpOutputMessage outputMessage) throws IOException {
         if (e.getErrors().isEmpty())
             throw new RuntimeException("errorsToXML should not be called with an empty list");
 
@@ -88,7 +98,7 @@ public class MultiExceptionGPXMessageBodyWriter implements MessageBodyWriter<Mul
             }
             TransformerFactory transformerFactory = TransformerFactory.newInstance();
             Transformer transformer = transformerFactory.newTransformer();
-            transformer.transform(new DOMSource(doc), new StreamResult(entityStream));
+            transformer.transform(new DOMSource(doc), new StreamResult(outputMessage.getBody()));
         } catch (ParserConfigurationException | TransformerException e2) {
             throw new RuntimeException(e2);
         }

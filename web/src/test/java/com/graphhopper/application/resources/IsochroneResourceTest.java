@@ -18,6 +18,9 @@
 
 package com.graphhopper.application.resources;
 
+import com.graphhopper.application.util.GraphHopperAppExtension;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import com.graphhopper.application.util.ClientTarget;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.graphhopper.application.GraphHopperApplication;
 import com.graphhopper.application.GraphHopperServerConfiguration;
@@ -27,19 +30,15 @@ import com.graphhopper.util.BodyAndStatus;
 import com.graphhopper.util.Helper;
 import com.graphhopper.util.JsonFeatureCollection;
 import com.graphhopper.util.TurnCostsConfig;
-import io.dropwizard.testing.junit5.DropwizardAppExtension;
-import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Polygon;
 
-import jakarta.ws.rs.client.WebTarget;
 import java.io.File;
 import java.util.Arrays;
 
@@ -47,10 +46,10 @@ import static com.graphhopper.application.resources.Util.getWithStatus;
 import static com.graphhopper.application.util.TestUtils.clientTarget;
 import static org.junit.jupiter.api.Assertions.*;
 
-@ExtendWith(DropwizardExtensionsSupport.class)
 public class IsochroneResourceTest {
     private static final String DIR = "./target/andorra-gh/";
-    public static final DropwizardAppExtension<GraphHopperServerConfiguration> app = new DropwizardAppExtension<>(GraphHopperApplication.class, createConfig());
+    @RegisterExtension
+    static final GraphHopperAppExtension app = new GraphHopperAppExtension(createConfig());
 
     private static GraphHopperServerConfiguration createConfig() {
         GraphHopperServerConfiguration config = new GraphHopperServerTestConfiguration();
@@ -140,7 +139,7 @@ public class IsochroneResourceTest {
 
     @Test
     public void requestByWeightLimit() {
-        WebTarget commonTarget = clientTarget(app, "/isochrone")
+        ClientTarget commonTarget = clientTarget(app, "/isochrone")
                 .queryParam("profile", "fast_car")
                 .queryParam("point", "42.531073,1.573792")
                 .queryParam("type", "geojson");

@@ -18,35 +18,111 @@
 
 package com.graphhopper.http;
 
-import jakarta.ws.rs.container.ContainerRequestContext;
-import jakarta.ws.rs.container.ContainerRequestFilter;
-import jakarta.ws.rs.container.PreMatching;
-import java.net.URI;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UriUtils;
 
-@PreMatching
-public class PtRedirectFilter implements ContainerRequestFilter {
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+
+/**
+ * Serves /route and /isochrone requests for ?vehicle=pt or ?profile=pt with /route-pt and /isochrone-pt, without
+ * the vehicle and profile parameters. The path is compared decoded, so /r%6Fute is redirected as well.
+ */
+public class PtRedirectFilter extends OncePerRequestFilter {
+
     @Override
-    public void filter(ContainerRequestContext requestContext) {
-        if (shouldRedirect(requestContext)) {
-            if (requestContext.getUriInfo().getPath().equals("route")) {
-                URI forwardURI = requestContext.getUriInfo().getRequestUriBuilder().replacePath("/route-pt")
-                        .replaceQueryParam("vehicle")
-                        .replaceQueryParam("profile")
-                        .build();
-                requestContext.setRequestUri(forwardURI);
-            } else if (requestContext.getUriInfo().getPath().equals("isochrone")) {
-                URI forwardURI = requestContext.getUriInfo().getRequestUriBuilder().replacePath("/isochrone-pt")
-                        .replaceQueryParam("vehicle")
-                        .replaceQueryParam("profile")
-                        .build();
-                requestContext.setRequestUri(forwardURI);
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
+        if (shouldRedirect(request)) {
+            String path = UriUtils.decode(request.getRequestURI().substring(request.getContextPath().length()), StandardCharsets.UTF_8);
+            if (path.equals("/route")) {
+                chain.doFilter(new ForwardedRequest(request, "/route-pt"), response);
+                return;
+            } else if (path.equals("/isochrone")) {
+                chain.doFilter(new ForwardedRequest(request, "/isochrone-pt"), response);
+                return;
             }
         }
+        chain.doFilter(request, response);
     }
 
-    private boolean shouldRedirect(ContainerRequestContext requestContext) {
-        String maybeVehicle = requestContext.getUriInfo().getQueryParameters().getFirst("vehicle");
-        String maybeProfile = requestContext.getUriInfo().getQueryParameters().getFirst("profile");
+    private boolean shouldRedirect(HttpServletRequest request) {
+        Map<String, List<String>> parameters = QueryParameters.parse(request.getQueryString());
+        String maybeVehicle = first(parameters, "vehicle");
+        String maybeProfile = first(parameters, "profile");
         return "pt".equals(maybeVehicle) || "pt".equals(maybeProfile);
+    }
+
+    private static String first(Map<String, List<String>> parameters, String name) {
+        List<String> values = parameters.get(name);
+        return values == null ? null : values.get(0);
+    }
+
+    private static class ForwardedRequest extends HttpServletRequestWrapper {
+        private final String path;
+        private final String queryString;
+        private final Map<String, String[]> parameters;
+
+        ForwardedRequest(HttpServletRequest request, String path) {
+            super(request);
+            this.path = path;
+            this.queryString = QueryParameters.without(request.getQueryString(), "vehicle", "profile");
+            Map<String, String[]> parameters = new LinkedHashMap<>();
+            QueryParameters.parse(queryString).forEach((name, values) -> parameters.put(name, values.toArray(new String[0])));
+            this.parameters = Collections.unmodifiableMap(parameters);
+        }
+
+        @Override
+        public String getRequestURI() {
+            return getContextPath() + path;
+        }
+
+        @Override
+        public StringBuffer getRequestURL() {
+            StringBuffer url = new StringBuffer(super.getRequestURL());
+            url.setLength(url.length() - super.getRequestURI().length());
+            return url.append(getRequestURI());
+        }
+
+        @Override
+        public String getServletPath() {
+            return path;
+        }
+
+        @Override
+        public String getPathInfo() {
+            return null;
+        }
+
+        @Override
+        public String getQueryString() {
+            return queryString;
+        }
+
+        @Override
+        public String getParameter(String name) {
+            String[] values = parameters.get(name);
+            return values == null ? null : values[0];
+        }
+
+        @Override
+        public Map<String, String[]> getParameterMap() {
+            return parameters;
+        }
+
+        @Override
+        public Enumeration<String> getParameterNames() {
+            return Collections.enumeration(parameters.keySet());
+        }
+
+        @Override
+        public String[] getParameterValues(String name) {
+            return parameters.get(name);
+        }
     }
 }

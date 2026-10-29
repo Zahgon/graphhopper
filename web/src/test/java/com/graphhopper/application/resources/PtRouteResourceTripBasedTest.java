@@ -17,6 +17,9 @@
  */
 package com.graphhopper.application.resources;
 
+import com.graphhopper.application.util.GraphHopperAppExtension;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import com.graphhopper.application.util.ClientResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.graphhopper.GHResponse;
 import com.graphhopper.application.GraphHopperApplication;
@@ -26,14 +29,10 @@ import com.graphhopper.config.Profile;
 import com.graphhopper.resources.InfoResource;
 import com.graphhopper.routing.TestProfiles;
 import com.graphhopper.util.Helper;
-import io.dropwizard.testing.junit5.DropwizardAppExtension;
-import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
-import jakarta.ws.rs.core.Response;
 import java.io.File;
 import java.util.Collections;
 
@@ -44,10 +43,10 @@ import static org.junit.jupiter.api.Assertions.*;
  * Tests the entire app, not the resource, so that the plugging-together
  * of stuff (which is different for PT than for the rest) is under test, too.
  */
-@ExtendWith(DropwizardExtensionsSupport.class)
 public class PtRouteResourceTripBasedTest {
     private static final String DIR = "./target/gtfs-app-trip-based-gh/";
-    public static final DropwizardAppExtension<GraphHopperServerConfiguration> app = new DropwizardAppExtension<>(GraphHopperApplication.class, createConfig());
+    @RegisterExtension
+    static final GraphHopperAppExtension app = new GraphHopperAppExtension(createConfig());
 
     private static GraphHopperServerConfiguration createConfig() {
         GraphHopperServerConfiguration config = new GraphHopperServerTestConfiguration();
@@ -71,7 +70,7 @@ public class PtRouteResourceTripBasedTest {
 
     @Test
     public void testStationStationQuery() {
-        final Response response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
+        final ClientResponse response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
                 .queryParam("point", "Stop(NADAV)")
                 .queryParam("point", "Stop(NANAA)")
                 .queryParam("profile", "pt")
@@ -84,7 +83,7 @@ public class PtRouteResourceTripBasedTest {
 
     @Test
     public void testStationStationQueryWithOffsetDateTime() {
-        final Response response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
+        final ClientResponse response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
                 .queryParam("point", "Stop(NADAV)")
                 .queryParam("point", "Stop(NANAA)")
                 .queryParam("profile", "pt")
@@ -97,7 +96,7 @@ public class PtRouteResourceTripBasedTest {
 
     @Test
     public void testPointPointQuery() {
-        final Response response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
+        final ClientResponse response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
                 .queryParam("point", "36.914893,-116.76821") // NADAV stop
                 .queryParam("point", "36.914944,-116.761472") //NANAA stop
                 .queryParam("profile", "pt")
@@ -111,7 +110,7 @@ public class PtRouteResourceTripBasedTest {
 
     @Test
     public void testWalkQuery() {
-        final Response response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
+        final ClientResponse response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
                 .queryParam("point", "36.914893,-116.76821")
                 .queryParam("point", "36.914944,-116.761472")
                 .queryParam("profile", "foot")
@@ -123,7 +122,7 @@ public class PtRouteResourceTripBasedTest {
 
     @Test
     public void testNoPoints() {
-        final Response response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
+        final ClientResponse response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
                 .queryParam("profile", "pt")
                 .request().buildGet().invoke();
         assertEquals(400, response.getStatus());
@@ -131,7 +130,7 @@ public class PtRouteResourceTripBasedTest {
 
     @Test
     public void testOnePoint() {
-        final Response response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
+        final ClientResponse response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
                 .queryParam("point", "36.914893,-116.76821")
                 .queryParam("profile", "pt")
                 .queryParam("pt.earliest_departure_time", "2007-01-01T08:00:00Z")
@@ -143,7 +142,7 @@ public class PtRouteResourceTripBasedTest {
 
     @Test
     public void testBadPoints() {
-        final Response response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
+        final ClientResponse response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
                 .queryParam("point", "pups")
                 .queryParam("profile", "pt")
                 .queryParam("pt.earliest_departure_time", "2007-01-01T08:00:00Z")
@@ -153,7 +152,7 @@ public class PtRouteResourceTripBasedTest {
 
     @Test
     public void testNoTime() {
-        final Response response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
+        final ClientResponse response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
                 .queryParam("point", "36.914893,-116.76821") // NADAV stop
                 .queryParam("point", "36.914944,-116.761472") //NANAA stop
                 .queryParam("profile", "pt")
@@ -167,7 +166,7 @@ public class PtRouteResourceTripBasedTest {
 
     @Test
     public void testBadTime() {
-        final Response response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
+        final ClientResponse response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
                 .queryParam("point", "36.914893,-116.76821") // NADAV stop
                 .queryParam("point", "36.914944,-116.761472") //NANAA stop
                 .queryParam("profile", "pt")
@@ -180,7 +179,7 @@ public class PtRouteResourceTripBasedTest {
 
     @Test
     public void testProfileQuery() {
-        final Response response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
+        final ClientResponse response = clientTarget(app, "/route").queryParam("pt.algorithm", "trip_based")
                 .queryParam("point", "36.91311729030539,-116.76769495010377")
                 .queryParam("point", "36.91260259593356,-116.76149368286134")
                 .queryParam("profile", "pt")
@@ -197,7 +196,7 @@ public class PtRouteResourceTripBasedTest {
 
     @Test
     public void testInfo() {
-        final Response response = clientTarget(app, "/info")
+        final ClientResponse response = clientTarget(app, "/info")
                 .request().buildGet().invoke();
         assertEquals(200, response.getStatus());
         InfoResource.Info info = response.readEntity(InfoResource.Info.class);

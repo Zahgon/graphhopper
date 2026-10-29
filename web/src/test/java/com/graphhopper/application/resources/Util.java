@@ -18,22 +18,22 @@
 
 package com.graphhopper.application.resources;
 
+import com.graphhopper.application.util.ClientTarget;
+import com.graphhopper.application.util.ClientResponse;
+import com.graphhopper.application.util.Entity;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.graphhopper.util.BodyAndStatus;
 
-import jakarta.ws.rs.client.Entity;
-import jakarta.ws.rs.client.WebTarget;
-import jakarta.ws.rs.core.Response;
 
 public class Util {
-    public static BodyAndStatus getWithStatus(WebTarget webTarget) {
-        try (Response response = webTarget.request().get()) {
+    public static BodyAndStatus getWithStatus(ClientTarget webTarget) {
+        try (ClientResponse response = webTarget.request().get()) {
             return new BodyAndStatus(response.readEntity(JsonNode.class), response.getStatus());
         }
     }
 
-    public static BodyAndStatus postWithStatus(WebTarget webTarget, String json) {
-        try (Response response = webTarget.request().post(Entity.json(json))) {
+    public static BodyAndStatus postWithStatus(ClientTarget webTarget, String json) {
+        try (ClientResponse response = webTarget.request().post(Entity.json(json))) {
             return new BodyAndStatus(response.readEntity(JsonNode.class), response.getStatus());
         }
     }

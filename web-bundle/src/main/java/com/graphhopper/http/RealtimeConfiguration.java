@@ -19,7 +19,6 @@
 package com.graphhopper.http;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.dropwizard.client.HttpClientConfiguration;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;

@@ -17,18 +17,17 @@
  */
 package com.graphhopper.application.resources;
 
+import com.graphhopper.application.util.GraphHopperAppExtension;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import com.graphhopper.application.GraphHopperApplication;
 import com.graphhopper.application.GraphHopperServerConfiguration;
 import com.graphhopper.application.util.GraphHopperServerTestConfiguration;
 import com.graphhopper.routing.TestProfiles;
 import com.graphhopper.util.Helper;
-import io.dropwizard.testing.junit5.DropwizardAppExtension;
-import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import no.ecc.vectortile.VectorTileDecoder;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.locationtech.jts.geom.Geometry;
 
 import java.io.ByteArrayOutputStream;
@@ -47,10 +46,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * @author Peter Karich
  */
-@ExtendWith(DropwizardExtensionsSupport.class)
 public class MVTResourceTest {
     private static final String DIR = "./target/andorra-gh/";
-    private static final DropwizardAppExtension<GraphHopperServerConfiguration> app = new DropwizardAppExtension<>(GraphHopperApplication.class, createConfig());
+    @RegisterExtension
+    static final GraphHopperAppExtension app = new GraphHopperAppExtension(createConfig());
 
     private static GraphHopperServerConfiguration createConfig() {
         GraphHopperServerConfiguration config = new GraphHopperServerTestConfiguration();

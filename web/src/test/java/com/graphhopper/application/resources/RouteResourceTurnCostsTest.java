@@ -18,6 +18,8 @@
 
 package com.graphhopper.application.resources;
 
+import com.graphhopper.application.util.GraphHopperAppExtension;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.graphhopper.application.GraphHopperApplication;
 import com.graphhopper.application.GraphHopperServerConfiguration;
@@ -28,11 +30,8 @@ import com.graphhopper.routing.TestProfiles;
 import com.graphhopper.util.BodyAndStatus;
 import com.graphhopper.util.Helper;
 import com.graphhopper.util.TurnCostsConfig;
-import io.dropwizard.testing.junit5.DropwizardAppExtension;
-import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -46,10 +45,10 @@ import static com.graphhopper.application.util.TestUtils.clientTarget;
 import static java.util.Collections.emptyList;
 import static org.junit.jupiter.api.Assertions.*;
 
-@ExtendWith(DropwizardExtensionsSupport.class)
 public class RouteResourceTurnCostsTest {
     private static final String DIR = "./target/route-resource-turn-costs-gh/";
-    private static final DropwizardAppExtension<GraphHopperServerConfiguration> app = new DropwizardAppExtension<>(GraphHopperApplication.class, createConfig());
+    @RegisterExtension
+    static final GraphHopperAppExtension app = new GraphHopperAppExtension(createConfig());
 
     private static GraphHopperServerConfiguration createConfig() {
         GraphHopperServerConfiguration config = new GraphHopperServerTestConfiguration();

@@ -17,6 +17,10 @@
  */
 package com.graphhopper.application.resources;
 
+import com.graphhopper.application.util.GraphHopperAppExtension;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import com.graphhopper.application.util.ClientResponse;
+import com.graphhopper.application.util.Entity;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.graphhopper.application.GraphHopperApplication;
 import com.graphhopper.application.GraphHopperServerConfiguration;
@@ -26,19 +30,14 @@ import com.graphhopper.jackson.ResponsePathDeserializerHelper;
 import com.graphhopper.routing.TestProfiles;
 import com.graphhopper.util.Helper;
 import com.graphhopper.util.TurnCostsConfig;
-import io.dropwizard.testing.junit5.DropwizardAppExtension;
-import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.locationtech.jts.algorithm.distance.DiscreteHausdorffDistance;
 import org.locationtech.jts.geom.LineString;
 import org.locationtech.jts.io.ParseException;
 import org.locationtech.jts.io.WKTReader;
 
-import jakarta.ws.rs.client.Entity;
-import jakarta.ws.rs.core.Response;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
@@ -49,11 +48,11 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * @author easbar
  */
-@ExtendWith(DropwizardExtensionsSupport.class)
 public class MapMatchingResourceTurnCostsTest {
 
     private static final String DIR = "../target/mapmatchingtest";
-    public static final DropwizardAppExtension<GraphHopperServerConfiguration> app = new DropwizardAppExtension<>(GraphHopperApplication.class, createConfig());
+    @RegisterExtension
+    static final GraphHopperAppExtension app = new GraphHopperAppExtension(createConfig());
 
     private static GraphHopperServerConfiguration createConfig() {
         GraphHopperServerConfiguration config = new GraphHopperServerConfiguration();
@@ -101,7 +100,7 @@ public class MapMatchingResourceTurnCostsTest {
 
     @Test
     public void errorOnUnknownProfile() {
-        try (Response response = clientTarget(app, "/match?profile=xyz")
+        try (ClientResponse response = clientTarget(app, "/match?profile=xyz")
                 .request()
                 .buildPost(Entity.xml(getClass().getResourceAsStream("another-tour-with-loop.gpx")))
                 .invoke()) {

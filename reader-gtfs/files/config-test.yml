@@ -12,29 +12,16 @@ graphhopper:
       weighting: fastest
 
 server:
-  application_connectors:
-    - type: http
-      port: 8989
-      # for security reasons bind to localhost
-      bind_host: localhost
-  request_log:
-    appenders: []
-  admin_connectors:
-    - type: http
-      port: 8990
-      bind_host: localhost
+  port: 8989
+  # for security reasons bind to localhost
+  address: localhost
+management:
+  server:
+    port: 8990
+    address: localhost
 
 logging:
-  # level: DEBUG
-  appenders:
-    #  - type: file
-    #    time_zone: UTC
-    #    current_log_filename: logs/graphhopper.log
-    #    log_format: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
-    #    archive: true
-    #    archived_log_filename_pattern: ./logs/graphhopper-%d.log.gz
-    #    archived_file_count: 30
-    #    never_block: true
-    - type: console
-      time_zone: UTC
-      log_format: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  # level.root: DEBUG
+  # file.name: logs/graphhopper.log
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS,UTC} [%thread] %-5level %logger{36} - %msg%n"

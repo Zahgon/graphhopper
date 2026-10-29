@@ -20,18 +20,16 @@ import org.locationtech.jts.geom.util.AffineTransformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import jakarta.inject.Inject;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.UriInfo;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-@Path("mvt")
+@RestController
+@RequestMapping("/mvt")
 public class MVTResource {
 
     private static final Logger logger = LoggerFactory.getLogger(MVTResource.class);
@@ -39,28 +37,23 @@ public class MVTResource {
     private final GraphHopper graphHopper;
     private final EncodingManager encodingManager;
 
-    @Inject
     public MVTResource(GraphHopper graphHopper, EncodingManager encodingManager) {
         this.graphHopper = graphHopper;
         this.encodingManager = encodingManager;
     }
 
-    @GET
-    @Path("{z}/{x}/{y}.mvt")
-    @Produces("application/x-protobuf")
-    public Response doGetXyz(
-            @Context HttpServletRequest httpReq,
-            @Context UriInfo uriInfo,
-            @PathParam("z") int zInfo,
-            @PathParam("x") int xInfo,
-            @PathParam("y") int yInfo,
-            @QueryParam("render_all") @DefaultValue("false") Boolean renderAll) {
+    @GetMapping(value = "/{z}/{x}/{y}.mvt", produces = "application/x-protobuf")
+    public ResponseEntity<byte[]> doGetXyz(
+            @PathVariable("z") int zInfo,
+            @PathVariable("x") int xInfo,
+            @PathVariable("y") int yInfo,
+            @RequestParam(name = "render_all", defaultValue = "false") Boolean renderAll) {
 
         if (zInfo <= 9) {
             byte[] bytes = new VectorTileEncoder().encode();
-            return Response.fromResponse(Response.ok(bytes, PBF).build())
+            return ResponseEntity.ok().contentType(PBF)
                     .header("X-GH-Took", "0")
-                    .build();
+                    .body(bytes);
         }
 
         StopWatch totalSW = new StopWatch().start();
@@ -149,8 +142,8 @@ public class MVTResource {
         byte[] bytes = vectorTileEncoder.encode();
         totalSW.stop();
         logger.debug("took: " + totalSW.getMillis() + "ms, edges:" + edgeCounter.get());
-        return Response.ok(bytes, PBF).header("X-GH-Took", "" + totalSW.getSeconds() * 1000)
-                .build();
+        return ResponseEntity.ok().contentType(PBF).header("X-GH-Took", "" + totalSW.getSeconds() * 1000)
+                .body(bytes);
     }
 
     Coordinate num2deg(int xInfo, int yInfo, int zoom) {

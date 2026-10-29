@@ -30,53 +30,62 @@ import com.graphhopper.http.OffsetDateTimeParam;
 import com.graphhopper.jackson.ResponsePathSerializer;
 import com.graphhopper.util.Helper;
 import com.graphhopper.util.StopWatch;
-import io.dropwizard.jersey.params.AbstractParam;
-import org.glassfish.hk2.api.ServiceLocator;
+import com.graphhopper.http.AbstractParam;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.inject.Inject;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.MediaType;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 import static java.util.stream.Collectors.toList;
 
-@Path("route-pt")
+@RestController
+@RequestMapping("/route-pt")
 public class PtRouteResource {
 
+    /**
+     * The names of the routers that can be chosen with the pt.algorithm parameter.
+     */
+    public static final String CLASSIC = "classic";
+    public static final String FREE_WALK = "free_walk";
+    public static final String TRIP_BASED = "trip_based";
+
     private final GraphHopperConfig config;
-    private final PtRouter ptRouter;
+    private final ObjectProvider<PtRouter> ptRouter;
+    private final BeanFactory beanFactory;
 
-    @Inject
-    ServiceLocator serviceLocator;
-
-    @Inject
-    public PtRouteResource(GraphHopperConfig config, PtRouter ptRouter) {
+    public PtRouteResource(GraphHopperConfig config, ObjectProvider<PtRouter> ptRouter, BeanFactory beanFactory) {
         this.config = config;
         this.ptRouter = ptRouter;
+        this.beanFactory = beanFactory;
     }
 
-    @GET
-    @Produces(MediaType.APPLICATION_JSON)
-    public ObjectNode route(@QueryParam("point") @Size(min=2,max=2) List<GHLocationParam> requestPoints,
-                            @QueryParam("pt.earliest_departure_time") @NotNull OffsetDateTimeParam departureTimeParam,
-                            @QueryParam("pt.profile_duration") DurationParam profileDuration,
-                            @QueryParam("pt.arrive_by") @DefaultValue("false") boolean arriveBy,
-                            @QueryParam("locale") String localeStr,
-                            @QueryParam("pt.ignore_transfers") Boolean ignoreTransfers,
-                            @QueryParam("pt.profile") Boolean profileQuery,
-                            @QueryParam("pt.limit_solutions") Integer limitSolutions,
-                            @QueryParam("pt.limit_trip_time") DurationParam limitTripTime,
-                            @QueryParam("pt.limit_street_time") DurationParam limitStreetTime,
-                            @QueryParam("pt.access_profile") String accessProfile,
-                            @QueryParam("pt.beta_access_time") Double betaAccessTime,
-                            @QueryParam("pt.egress_profile") String egressProfile,
-                            @QueryParam("pt.beta_egress_time") Double betaEgressTime,
-                            @QueryParam("pt.algorithm") String algorithm) {
-        PtRouter ptRouter = serviceLocator.getService(PtRouter.class, algorithm);
+    @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+    public ObjectNode route(@RequestParam(name = "point", required = false) @Size(min=2,max=2) List<GHLocationParam> requestPoints,
+                            @RequestParam(name = "pt.earliest_departure_time", required = false) @NotNull OffsetDateTimeParam departureTimeParam,
+                            @RequestParam(name = "pt.profile_duration", required = false) DurationParam profileDuration,
+                            @RequestParam(name = "pt.arrive_by", defaultValue = "false") boolean arriveBy,
+                            @RequestParam(name = "locale", required = false) String localeStr,
+                            @RequestParam(name = "pt.ignore_transfers", required = false) Boolean ignoreTransfers,
+                            @RequestParam(name = "pt.profile", required = false) Boolean profileQuery,
+                            @RequestParam(name = "pt.limit_solutions", required = false) Integer limitSolutions,
+                            @RequestParam(name = "pt.limit_trip_time", required = false) DurationParam limitTripTime,
+                            @RequestParam(name = "pt.limit_street_time", required = false) DurationParam limitStreetTime,
+                            @RequestParam(name = "pt.access_profile", required = false) String accessProfile,
+                            @RequestParam(name = "pt.beta_access_time", required = false) Double betaAccessTime,
+                            @RequestParam(name = "pt.egress_profile", required = false) String egressProfile,
+                            @RequestParam(name = "pt.beta_egress_time", required = false) Double betaEgressTime,
+                            @RequestParam(name = "pt.algorithm", required = false) String algorithm) {
+        PtRouter ptRouter = algorithm == null ? this.ptRouter.getObject()
+                : List.of(CLASSIC, FREE_WALK, TRIP_BASED).contains(algorithm) ? beanFactory.getBean(algorithm, PtRouter.class) : null;
 
         StopWatch stopWatch = new StopWatch().start();
         List<GHLocation> points = requestPoints.stream().map(AbstractParam::get).collect(toList());

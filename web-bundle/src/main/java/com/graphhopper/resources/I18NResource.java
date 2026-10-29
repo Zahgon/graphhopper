@@ -21,22 +21,21 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.graphhopper.util.Translation;
 import com.graphhopper.util.TranslationMap;
 
-import jakarta.inject.Inject;
-import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.MediaType;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.*;
+
 import java.util.Locale;
 import java.util.Map;
 
 /**
  * @author Peter Karich
  */
-@Path("i18n")
-@Produces(MediaType.APPLICATION_JSON)
+@RestController
+@RequestMapping(value = "/i18n", produces = MediaType.APPLICATION_JSON_VALUE)
 public class I18NResource {
 
     private final TranslationMap map;
 
-    @Inject
     public I18NResource(TranslationMap map) {
         this.map = map;
     }
@@ -48,16 +47,15 @@ public class I18NResource {
         public Map<String, String> defaultTr;
     }
 
-    @GET
-    public Response getFromHeader(@HeaderParam("Accept-Language") String acceptLang) {
+    @GetMapping
+    public Response getFromHeader(@RequestHeader(name = "Accept-Language", required = false) String acceptLang) {
         if (acceptLang == null)
             return get("");
         return get(acceptLang.split(",")[0]);
     }
 
-    @GET
-    @Path("/{locale}")
-    public Response get(@PathParam("locale") String locale) {
+    @GetMapping("/{locale}")
+    public Response get(@PathVariable("locale") String locale) {
         Translation tr = map.get(locale);
         Response json = new Response();
         if (tr != null && !Locale.US.equals(tr.getLocale())) {

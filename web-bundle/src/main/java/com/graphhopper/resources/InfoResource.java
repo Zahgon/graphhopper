@@ -29,19 +29,19 @@ import com.graphhopper.util.Constants;
 import com.graphhopper.util.CustomModel;
 import org.locationtech.jts.geom.Envelope;
 
-import jakarta.inject.Inject;
-import jakarta.inject.Named;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.core.MediaType;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import java.util.*;
 
 /**
  * @author Peter Karich
  */
-@Path("info")
-@Produces(MediaType.APPLICATION_JSON)
+@RestController
+@RequestMapping(value = "/info", produces = MediaType.APPLICATION_JSON_VALUE)
 public class InfoResource {
 
     private final GraphHopperConfig config;
@@ -51,8 +51,7 @@ public class InfoResource {
     private final boolean hasElevation;
     private final Set<String> privateEV;
 
-    @Inject
-    public InfoResource(GraphHopperConfig config, GraphHopper graphHopper, @Named("hasElevation") Boolean hasElevation) {
+    public InfoResource(GraphHopperConfig config, GraphHopper graphHopper, @Qualifier("hasElevation") Boolean hasElevation) {
         this.config = config;
         this.encodingManager = graphHopper.getEncodingManager();
         this.privateEV = new HashSet<>(Arrays.asList(config.getString("graph.encoded_values.private", "").split(",")));
@@ -93,7 +92,7 @@ public class InfoResource {
         public String data_date;
     }
 
-    @GET
+    @GetMapping
     public Info getInfo() {
         final Info info = new Info();
         info.bbox = new Envelope(baseGraph.getBounds().minLon, baseGraph.getBounds().maxLon, baseGraph.getBounds().minLat, baseGraph.getBounds().maxLat);

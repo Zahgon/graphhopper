@@ -29,26 +29,28 @@ import com.graphhopper.util.exceptions.PointNotFoundException;
 import com.graphhopper.util.shapes.GHPoint;
 import com.graphhopper.util.shapes.GHPoint3D;
 
-import jakarta.inject.Inject;
-import jakarta.inject.Named;
-import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.MediaType;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import java.util.List;
 
 /**
  * @author svantulden
  * @author Michael Zilske
  */
-@Path("nearest")
-@Produces(MediaType.APPLICATION_JSON)
+@RestController
+@RequestMapping(value = "/nearest", produces = MediaType.APPLICATION_JSON_VALUE)
 public class NearestResource {
 
     private final DistanceCalc calc = DistanceCalcEarth.DIST_EARTH;
     private final LocationIndex index;
     private final boolean hasElevation;
 
-    @Inject
-    NearestResource(LocationIndex index, @Named("hasElevation") Boolean hasElevation) {
+    NearestResource(LocationIndex index, @Qualifier("hasElevation") Boolean hasElevation) {
         this.index = index;
         this.hasElevation = hasElevation;
     }
@@ -65,8 +67,8 @@ public class NearestResource {
         }
     }
 
-    @GET
-    public Response doGet(@QueryParam("point") GHPoint point, @QueryParam("elevation") @DefaultValue("false") boolean elevation) {
+    @GetMapping
+    public Response doGet(@RequestParam(name = "point", required = false) GHPoint point, @RequestParam(name = "elevation", defaultValue = "false") boolean elevation) {
         Snap snap = index.findClosest(point.lat, point.lon, EdgeFilter.ALL_EDGES);
         if (snap.isValid()) {
             GHPoint3D snappedPoint = snap.getSnappedPoint();

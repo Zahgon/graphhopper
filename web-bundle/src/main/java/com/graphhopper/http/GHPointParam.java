@@ -19,16 +19,15 @@
 package com.graphhopper.http;
 
 import com.graphhopper.util.shapes.GHPoint;
-import io.dropwizard.jersey.params.AbstractParam;
 
 
 /**
- * This is a glue type, used to plug GHPoint as a custom web resource parameter type into Dropwizard,
+ * This is a glue type, used to plug GHPoint as a custom web resource parameter type into the web layer,
  * in order to get the best handling of exceptions, validation messages, and such.
  *
  * The structure of this class (including both delegating constructors) should probably be left exactly as it is,
- * and behavior implemented with this should be under tests, because Dropwizard slurps it in by reflection,
- * and I don't know how stable that is over Dropwizard versions.
+ * and behavior implemented with this should be under tests, because the parameter conversion creates it by reflection,
+ * using the constructor that takes the parameter name.
  *
  * This is only for annotated parameters that go directly into web resources, especially as a QueryParam.
  * Don't use it for fields in body types that go through Jackson ("entities").

@@ -19,7 +19,6 @@
 package com.graphhopper.http;
 
 import com.graphhopper.gtfs.GHLocation;
-import io.dropwizard.jersey.params.AbstractParam;
 
 public class GHLocationParam extends AbstractParam<GHLocation> {
 

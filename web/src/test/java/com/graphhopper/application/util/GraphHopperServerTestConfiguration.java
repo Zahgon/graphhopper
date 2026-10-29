@@ -18,8 +18,6 @@
 package com.graphhopper.application.util;
 
 import com.graphhopper.application.GraphHopperServerConfiguration;
-import io.dropwizard.core.server.DefaultServerFactory;
-import io.dropwizard.jetty.HttpConnectorFactory;
 
 /**
  * @author thomas aulinger
@@ -32,9 +30,9 @@ public class GraphHopperServerTestConfiguration extends GraphHopperServerConfigu
 
     private void init() {
         // The following is to make sure it runs with a random port
-        ((HttpConnectorFactory) ((DefaultServerFactory) getServerFactory()).getApplicationConnectors().get(0)).setPort(0);
+        getServerProperties().put("server.port", "0");
         // this is for admin port
-        ((HttpConnectorFactory) ((DefaultServerFactory) getServerFactory()).getAdminConnectors().get(0)).setPort(0);
+        getServerProperties().put("management.server.port", "0");
     }
 
 }

@@ -15,18 +15,10 @@
         <version>12.0-SNAPSHOT</version>
     </parent>
     <properties>
-        <shade-phase>package</shade-phase>
+        <skip-boot-jar>false</skip-boot-jar>
     </properties>
 
     <dependencies>
-        <dependency>
-            <groupId>io.dropwizard</groupId>
-            <artifactId>dropwizard-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.dropwizard</groupId>
-            <artifactId>dropwizard-assets</artifactId>
-        </dependency>
         <dependency>
             <groupId>com.graphhopper</groupId>
             <artifactId>graphhopper-web-bundle</artifactId>
@@ -37,10 +29,15 @@
             <artifactId>graphhopper-nav</artifactId>
             <version>${project.parent.version}</version>
         </dependency>
+        <dependency>
+            <groupId>net.sourceforge.argparse4j</groupId>
+            <artifactId>argparse4j</artifactId>
+            <version>0.9.0</version>
+        </dependency>
 
         <dependency>
-            <groupId>io.dropwizard</groupId>
-            <artifactId>dropwizard-testing</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -63,50 +60,31 @@
     <build>
         <plugins>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>3.2.1</version>
+                <!-- packages the executable Spring Boot jar graphhopper-web-*.jar (the plain jar stays as *.jar.original) -->
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
                 <configuration>
-                    <createDependencyReducedPom>true</createDependencyReducedPom>
-                    <filters>
-                        <filter>
-                            <artifact>*:*</artifact>
-                            <excludes>
-                                <exclude>META-INF/*.SF</exclude>
-                                <exclude>META-INF/*.DSA</exclude>
-                                <exclude>META-INF/*.RSA</exclude>
-                            </excludes>
-                        </filter>
-                    </filters>
+                    <mainClass>com.graphhopper.application.GraphHopperApplication</mainClass>
+                    <skip>${skip-boot-jar}</skip>
                 </configuration>
                 <executions>
                     <execution>
-                        <phase>${shade-phase}</phase>
+                        <id>repackage</id>
                         <goals>
-                            <goal>shade</goal>
+                            <goal>repackage</goal>
                         </goals>
-                        <configuration>
-                            <transformers>
-                                <transformer
-                                        implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
-                                <transformer
-                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.graphhopper.application.GraphHopperApplication</mainClass>
-                                </transformer>
-                            </transformers>
-                        </configuration>
                     </execution>
                 </executions>
             </plugin>
-
         </plugins>
     </build>
     <profiles>
         <profile>
-            <!-- use -Pskip-shaded-web-jar to build the web module as standard jar instead of the shaded fat jar -->
+            <!-- use -Pskip-shaded-web-jar to build the web module as standard jar instead of the executable fat jar -->
             <id>skip-shaded-web-jar</id>
             <properties>
-                <shade-phase>none</shade-phase>
+                <skip-boot-jar>true</skip-boot-jar>
             </properties>
         </profile>
     </profiles>

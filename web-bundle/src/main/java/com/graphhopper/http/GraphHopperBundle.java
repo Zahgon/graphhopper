@@ -18,13 +18,20 @@
 
 package com.graphhopper.http;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.MapperFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.util.StdDateFormat;
+import com.fasterxml.jackson.datatype.guava.GuavaModule;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.graphhopper.GraphHopper;
 import com.graphhopper.GraphHopperConfig;
 import com.graphhopper.gtfs.*;
+import com.graphhopper.http.errors.GHExceptionHandler;
 import com.graphhopper.http.health.GraphHopperHealthCheck;
+import com.graphhopper.http.health.HealthCheckRegistry;
+import com.graphhopper.http.health.ThreadDeadlockHealthCheck;
+import com.graphhopper.http.web.GHWebMvcConfiguration;
 import com.graphhopper.isochrone.algorithm.JTSTriangulator;
 import com.graphhopper.isochrone.algorithm.Triangulator;
 import com.graphhopper.jackson.Jackson;
@@ -35,323 +42,238 @@ import com.graphhopper.storage.BaseGraph;
 import com.graphhopper.storage.index.LocationIndex;
 import com.graphhopper.util.TranslationMap;
 import com.graphhopper.util.details.PathDetailsBuilderFactory;
-import io.dropwizard.client.HttpClientBuilder;
-import io.dropwizard.core.ConfiguredBundle;
-import io.dropwizard.core.setup.Bootstrap;
-import io.dropwizard.core.setup.Environment;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
-import org.apache.hc.client5.http.classic.HttpClient;
-import org.glassfish.hk2.api.Factory;
-import org.glassfish.hk2.utilities.binding.AbstractBinder;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.springframework.beans.factory.ListableBeanFactory;
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
+import org.springframework.context.annotation.*;
+import org.springframework.core.type.AnnotatedTypeMetadata;
 
-public class GraphHopperBundle implements ConfiguredBundle<GraphHopperBundleConfiguration> {
+/**
+ * The GraphHopper web service: the GraphHopper instance, started and stopped with the application, and the web
+ * resources that use it. Needs a {@link GraphHopperBundleConfiguration} bean.
+ * <p>
+ * The public transit resources (/route-pt, /isochrone-pt, /pt-mvt) are only available if gtfs.file is configured.
+ */
+@Configuration(proxyBeanMethods = false)
+@Import({GHWebMvcConfiguration.class, GHExceptionHandler.class,
+        MVTResource.class, NearestResource.class, RouteResource.class, IsochroneResource.class, MapMatchingResource.class,
+        SPTResource.class, I18NResource.class, InfoResource.class, HealthCheckResource.class,
+        GraphHopperBundle.PtConfiguration.class})
+public class GraphHopperBundle {
 
-    static class TranslationMapFactory implements Factory<TranslationMap> {
-
-        @Inject
-        GraphHopper graphHopper;
-
-        @Override
-        public TranslationMap provide() {
-            return graphHopper.getTranslationMap();
-        }
-
-        @Override
-        public void dispose(TranslationMap instance) {
-
-        }
-    }
-
-    static class BaseGraphFactory implements Factory<BaseGraph> {
-
-        @Inject
-        GraphHopper graphHopper;
-
-        @Override
-        public BaseGraph provide() {
-            return graphHopper.getBaseGraph();
-        }
-
-        @Override
-        public void dispose(BaseGraph instance) {
-
-        }
-    }
-
-    static class GtfsStorageFactory implements Factory<GtfsStorage> {
-
-        @Inject
-        GraphHopperGtfs graphHopper;
-
-        @Override
-        public GtfsStorage provide() {
-            return graphHopper.getGtfsStorage();
-        }
-
-        @Override
-        public void dispose(GtfsStorage instance) {
-
-        }
-    }
-
-    static class EncodingManagerFactory implements Factory<EncodingManager> {
-
-        @Inject
-        GraphHopper graphHopper;
-
-        @Override
-        public EncodingManager provide() {
-            return graphHopper.getEncodingManager();
-        }
-
-        @Override
-        public void dispose(EncodingManager instance) {
-
-        }
-    }
-
-    static class LocationIndexFactory implements Factory<LocationIndex> {
-
-        @Inject
-        GraphHopper graphHopper;
-
-        @Override
-        public LocationIndex provide() {
-            return graphHopper.getLocationIndex();
-        }
-
-        @Override
-        public void dispose(LocationIndex instance) {
-
-        }
-    }
-
-    static class ProfileResolverFactory implements Factory<ProfileResolver> {
-        @Inject
-        GraphHopper graphHopper;
-
-        @Override
-        public ProfileResolver provide() {
-            return new ProfileResolver(graphHopper.getProfiles());
-        }
-
-        @Override
-        public void dispose(ProfileResolver instance) {
-
-        }
-    }
-
-    static class GHRequestTransformerFactory implements Factory<GHRequestTransformer> {
-        @Override
-        public GHRequestTransformer provide() {
-            return req -> req;
-        }
-
-        @Override
-        public void dispose(GHRequestTransformer instance) {
-        }
-    }
-
-    static class PathDetailsBuilderFactoryFactory implements Factory<PathDetailsBuilderFactory> {
-
-        @Inject
-        GraphHopper graphHopper;
-
-        @Override
-        public PathDetailsBuilderFactory provide() {
-            return graphHopper.getPathDetailsBuilderFactory();
-        }
-
-        @Override
-        public void dispose(PathDetailsBuilderFactory profileResolver) {
-
-        }
-    }
-
-    static class MapMatchingRouterFactoryFactory implements Factory<MapMatchingResource.MapMatchingRouterFactory> {
-
-        @Inject
-        GraphHopper graphHopper;
-
-        @Override
-        public MapMatchingResource.MapMatchingRouterFactory provide() {
-            return hints -> MapMatching.routerFromGraphHopper(graphHopper, hints);
-        }
-
-        @Override
-        public void dispose(MapMatchingResource.MapMatchingRouterFactory mapMatchingRouterFactory) {
-
-        }
-    }
-
-    static class HasElevation implements Factory<Boolean> {
-
-        @Inject
-        GraphHopper graphHopper;
-
-        @Override
-        public Boolean provide() {
-            return graphHopper.hasElevation();
-        }
-
-        @Override
-        public void dispose(Boolean instance) {
-
-        }
-    }
-
-    private static class EmptyRealtimeFeedFactory implements Factory<RealtimeFeed> {
-
-        private final GtfsStorage staticGtfs;
-
-        @Inject
-        EmptyRealtimeFeedFactory(GtfsStorage staticGtfs) {
-            this.staticGtfs = staticGtfs;
-        }
-
-        @Override
-        public RealtimeFeed provide() {
-            return RealtimeFeed.empty();
-        }
-
-        @Override
-        public void dispose(RealtimeFeed realtimeFeed) {
-
-        }
-    }
-
-    @Override
-    public void initialize(Bootstrap<?> bootstrap) {
-        // See #1440: avoids warning regarding com.fasterxml.jackson.module.afterburner.util.MyClassLoader
-        bootstrap.setObjectMapper(io.dropwizard.jackson.Jackson.newMinimalObjectMapper());
+    /**
+     * @return the object mapper for the requests and responses, also used to read the configuration
+     */
+    public static ObjectMapper newObjectMapper() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new GuavaModule());
+        objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         // avoids warning regarding com.fasterxml.jackson.databind.util.ClassUtil
-        bootstrap.getObjectMapper().registerModule(new Jdk8Module());
-
-        Jackson.initObjectMapper(bootstrap.getObjectMapper());
-        bootstrap.getObjectMapper().setDateFormat(new StdDateFormat());
-
-        // Make snake_case work for server_log too ... still required for dropwizard 4.0.15
-        // See https://github.com/dropwizard/dropwizard/issues/1558
-        bootstrap.getObjectMapper().setConfig(bootstrap.getObjectMapper().getDeserializationConfig().with(MapperFeature.ALLOW_EXPLICIT_PROPERTY_RENAMING));
+        objectMapper.registerModule(new Jdk8Module());
+        Jackson.initObjectMapper(objectMapper);
+        objectMapper.setDateFormat(new StdDateFormat());
+        // Make snake_case work for explicitly named properties of the configuration, too
+        objectMapper.setConfig(objectMapper.getDeserializationConfig().with(MapperFeature.ALLOW_EXPLICIT_PROPERTY_RENAMING));
+        return objectMapper;
     }
 
-    @Override
-    public void run(GraphHopperBundleConfiguration configuration, Environment environment) {
+    @Bean
+    @Primary
+    public ObjectMapper objectMapper() {
+        return newObjectMapper();
+    }
+
+    @Bean
+    public GraphHopperConfig graphHopperConfig(GraphHopperBundleConfiguration configuration) {
         for (Object k : System.getProperties().keySet()) {
             if (k instanceof String && ((String) k).startsWith("graphhopper."))
                 throw new IllegalArgumentException("You need to prefix system parameters with '-Ddw.graphhopper.' instead of '-Dgraphhopper.' see #1879 and #1897");
         }
+        return configuration.getGraphHopperConfiguration();
+    }
 
-        // When Dropwizard's Hibernate Validation misvalidates a query parameter,
-        // a JerseyViolationException is thrown.
-        // With this mapper, we use our custom format for that (backwards compatibility),
-        // and also coerce the media type of the response to JSON, so we can return JSON error
-        // messages from methods that normally have a different return type.
-        // That's questionable, but on the other hand, Dropwizard itself does the same thing,
-        // not here, but in a different place (the custom parameter parsers).
-        // So for the moment we have to assume that both mechanisms
-        // a) always return JSON error messages, and
-        // b) there's no need to annotate the method with media type JSON for that.
-        //
-        // However, for places that throw IllegalArgumentException or MultiException,
-        // we DO need to use the media type JSON annotation, because
-        // those are agnostic to the media type (could be GPX!), so the server needs to know
-        // that a JSON error response is supported. (See below.)
-        environment.jersey().register(new GHJerseyViolationExceptionMapper());
+    @Bean(initMethod = "start", destroyMethod = "stop")
+    public GraphHopperManaged graphHopperManaged(GraphHopperConfig config) {
+        return new GraphHopperManaged(config);
+    }
 
-        // If the "?type=gpx" parameter is present, sets a corresponding media type header
-        environment.jersey().register(new TypeGPXFilter());
+    @Bean
+    public GraphHopper graphHopper(GraphHopperManaged graphHopperManaged) {
+        return graphHopperManaged.getGraphHopper();
+    }
 
-        // Together, these two take care that MultiExceptions thrown from RouteResource
-        // come out as JSON or GPX, depending on the media type
-        environment.jersey().register(new MultiExceptionMapper());
-        environment.jersey().register(new MultiExceptionGPXMessageBodyWriter());
+    @Bean
+    public Triangulator triangulator(GraphHopper graphHopper) {
+        return new JTSTriangulator(graphHopper.getRouterConfig());
+    }
 
-        // This makes an IllegalArgumentException come out as a MultiException with
-        // a single entry.
-        environment.jersey().register(new IllegalArgumentExceptionMapper());
+    @Bean
+    public MapMatchingResource.MapMatchingRouterFactory mapMatchingRouterFactory(GraphHopper graphHopper) {
+        return hints -> MapMatching.routerFromGraphHopper(graphHopper, hints);
+    }
 
-        final GraphHopperManaged graphHopperManaged = new GraphHopperManaged(configuration.getGraphHopperConfiguration());
-        environment.lifecycle().manage(graphHopperManaged);
-        final GraphHopper graphHopper = graphHopperManaged.getGraphHopper();
-        environment.jersey().register(new AbstractBinder() {
-            @Override
-            protected void configure() {
-                bind(configuration.getGraphHopperConfiguration()).to(GraphHopperConfig.class);
-                bind(graphHopper).to(GraphHopper.class);
+    @Bean
+    public PathDetailsBuilderFactory pathDetailsBuilderFactory(GraphHopper graphHopper) {
+        return graphHopper.getPathDetailsBuilderFactory();
+    }
 
-                bind(new JTSTriangulator(graphHopper.getRouterConfig())).to(Triangulator.class);
-                bindFactory(MapMatchingRouterFactoryFactory.class).to(MapMatchingResource.MapMatchingRouterFactory.class);
-                bindFactory(PathDetailsBuilderFactoryFactory.class).to(PathDetailsBuilderFactory.class);
-                bindFactory(ProfileResolverFactory.class).to(ProfileResolver.class);
-                bindFactory(GHRequestTransformerFactory.class).to(GHRequestTransformer.class);
-                bindFactory(HasElevation.class).to(Boolean.class).named("hasElevation");
-                bindFactory(LocationIndexFactory.class).to(LocationIndex.class);
-                bindFactory(TranslationMapFactory.class).to(TranslationMap.class);
-                bindFactory(EncodingManagerFactory.class).to(EncodingManager.class);
-                bindFactory(BaseGraphFactory.class).to(BaseGraph.class);
-                bindFactory(GtfsStorageFactory.class).to(GtfsStorage.class);
-            }
-        });
+    @Bean
+    public ProfileResolver profileResolver(GraphHopper graphHopper) {
+        return new ProfileResolver(graphHopper.getProfiles());
+    }
 
-        environment.jersey().register(MVTResource.class);
-        environment.jersey().register(NearestResource.class);
-        environment.jersey().register(RouteResource.class);
-        environment.jersey().register(IsochroneResource.class);
-        environment.jersey().register(MapMatchingResource.class);
+    @Bean
+    public GHRequestTransformer ghRequestTransformer() {
+        return req -> req;
+    }
 
-        if (configuration.getGraphHopperConfiguration().has("gtfs.file")) {
-            // These are pt-specific implementations of /route and /isochrone, but the same API.
-            // We serve them under different paths (/route-pt and /isochrone-pt), and forward
-            // requests for ?vehicle=pt there.
-            environment.jersey().register(new AbstractBinder() {
-                @Override
-                protected void configure() {
-                    if (configuration.getGraphHopperConfiguration().getBool("gtfs.free_walk", false)) {
-                        bind(PtRouterFreeWalkImpl.class).to(PtRouter.class);
-                    } else if (configuration.getGraphHopperConfiguration().getBool("gtfs.trip_based", false)) {
-                        bind(PtRouterTripBasedImpl.class).to(PtRouter.class);
-                    } else {
-                        bind(PtRouterImpl.class).to(PtRouter.class);
-                    }
-                    bind(PtRouterImpl.class).to(PtRouter.class).named("classic");
-                    bind(PtRouterFreeWalkImpl.class).to(PtRouter.class).named("free_walk");
-                    bind(PtRouterTripBasedImpl.class).to(PtRouter.class).named("trip_based");
-                }
-            });
-            environment.jersey().register(PtRouteResource.class);
-            environment.jersey().register(PtIsochroneResource.class);
-            environment.jersey().register(PtMVTResource.class);
-            environment.jersey().register(PtRedirectFilter.class);
+    @Bean
+    public Boolean hasElevation(GraphHopper graphHopper) {
+        return graphHopper.hasElevation();
+    }
+
+    @Bean
+    public LocationIndex locationIndex(GraphHopper graphHopper) {
+        return graphHopper.getLocationIndex();
+    }
+
+    @Bean
+    public TranslationMap translationMap(GraphHopper graphHopper) {
+        return graphHopper.getTranslationMap();
+    }
+
+    @Bean
+    public EncodingManager encodingManager(GraphHopper graphHopper) {
+        return graphHopper.getEncodingManager();
+    }
+
+    @Bean
+    public BaseGraph baseGraph(GraphHopper graphHopper) {
+        return graphHopper.getBaseGraph();
+    }
+
+    @Bean
+    public ThreadDeadlockHealthCheck deadlocksHealthCheck() {
+        return new ThreadDeadlockHealthCheck();
+    }
+
+    @Bean
+    public GraphHopperHealthCheck graphHopperHealthCheck(GraphHopper graphHopper) {
+        return new GraphHopperHealthCheck(graphHopper);
+    }
+
+    @Bean
+    public HealthCheckRegistry healthCheckRegistry(ThreadDeadlockHealthCheck deadlocksHealthCheck,
+                                                   GraphHopperHealthCheck graphHopperHealthCheck) {
+        HealthCheckRegistry registry = new HealthCheckRegistry();
+        registry.register("deadlocks", deadlocksHealthCheck);
+        registry.register("graphhopper", graphHopperHealthCheck);
+        return registry;
+    }
+
+    /**
+     * Matches if the GraphHopper configuration has a gtfs.file.
+     */
+    static class GtfsCondition implements Condition {
+        @Override
+        public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
+            ConfigurableBeanFactory beanFactory = context.getBeanFactory();
+            if (beanFactory == null)
+                return false;
+            String[] names = ((ListableBeanFactory) beanFactory).getBeanNamesForType(GraphHopperBundleConfiguration.class, false, false);
+            return names.length > 0 && beanFactory.getBean(names[0], GraphHopperBundleConfiguration.class)
+                    .getGraphHopperConfiguration().has("gtfs.file");
         }
-        environment.jersey().register(SPTResource.class);
-        environment.jersey().register(I18NResource.class);
-        environment.jersey().register(InfoResource.class);
-        environment.healthChecks().register("graphhopper", new GraphHopperHealthCheck(graphHopper));
-        environment.jersey().register(environment.healthChecks());
-        environment.jersey().register(HealthCheckResource.class);
+    }
 
-        if (configuration.gtfsrealtime().getFeeds().isEmpty()) {
-            environment.jersey().register(new AbstractBinder() {
-                @Override
-                protected void configure() {
-                    bindFactory(EmptyRealtimeFeedFactory.class).to(RealtimeFeed.class).in(Singleton.class);
-                }
-            });
-        } else {
-            final HttpClient httpClient = new HttpClientBuilder(environment)
-                    .using(configuration.gtfsrealtime().getHttpClientConfiguration())
-                    .build("gtfs-realtime-feed-loader");
-            RealtimeFeedLoadingCache realtimeFeedLoadingCache = new RealtimeFeedLoadingCache(((GraphHopperGtfs) graphHopper), httpClient, configuration);
-            environment.lifecycle().manage(realtimeFeedLoadingCache);
-            environment.jersey().register(new AbstractBinder() {
-                @Override
-                protected void configure() {
-                    bind(httpClient).to(HttpClient.class);
-                    bindFactory(realtimeFeedLoadingCache).to(RealtimeFeed.class);
-                }
-            });
+    /**
+     * These are pt-specific implementations of /route and /isochrone, but the same API.
+     * We serve them under different paths (/route-pt and /isochrone-pt), and forward
+     * requests for ?vehicle=pt there.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @Conditional(GtfsCondition.class)
+    @Import({PtRouteResource.class, PtIsochroneResource.class, PtMVTResource.class})
+    static class PtConfiguration {
+
+        @Bean
+        public GtfsStorage gtfsStorage(GraphHopper graphHopper) {
+            return ((GraphHopperGtfs) graphHopper).getGtfsStorage();
+        }
+
+        @Bean
+        public PtRedirectFilter ptRedirectFilter() {
+            return new PtRedirectFilter();
+        }
+
+        @Bean(initMethod = "start", destroyMethod = "stop")
+        @Conditional(RealtimeFeedsCondition.class)
+        public RealtimeFeedLoadingCache realtimeFeedLoadingCache(GraphHopper graphHopper, GraphHopperBundleConfiguration configuration) {
+            CloseableHttpClient httpClient = configuration.gtfsrealtime().getHttpClientConfiguration().build();
+            return new RealtimeFeedLoadingCache((GraphHopperGtfs) graphHopper, httpClient, configuration);
+        }
+
+        /**
+         * The realtime feed, fetched again for each request that uses it, as it changes over time.
+         */
+        @Bean
+        @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
+        public RealtimeFeed realtimeFeed(GraphHopperBundleConfiguration configuration, org.springframework.beans.factory.ObjectProvider<RealtimeFeedLoadingCache> cache) {
+            RealtimeFeedLoadingCache loadingCache = cache.getIfAvailable();
+            return loadingCache == null ? RealtimeFeed.empty() : loadingCache.provide();
+        }
+
+        @Bean
+        @Primary
+        @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
+        public PtRouter ptRouter(GraphHopperConfig config, GraphHopper graphHopper, TranslationMap translationMap, BaseGraph baseGraph,
+                                 EncodingManager encodingManager, LocationIndex locationIndex, GtfsStorage gtfsStorage,
+                                 RealtimeFeed realtimeFeed, PathDetailsBuilderFactory pathDetailsBuilderFactory) {
+            if (config.getBool("gtfs.free_walk", false))
+                return new PtRouterFreeWalkImpl(config, translationMap, baseGraph, encodingManager, locationIndex, gtfsStorage, realtimeFeed, pathDetailsBuilderFactory);
+            else if (config.getBool("gtfs.trip_based", false))
+                return new PtRouterTripBasedImpl(graphHopper, config, translationMap, baseGraph, encodingManager, locationIndex, gtfsStorage, pathDetailsBuilderFactory);
+            else
+                return new PtRouterImpl(config, translationMap, baseGraph, encodingManager, locationIndex, gtfsStorage, realtimeFeed, pathDetailsBuilderFactory);
+        }
+
+        @Bean(PtRouteResource.CLASSIC)
+        @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
+        public PtRouter classicPtRouter(GraphHopperConfig config, TranslationMap translationMap, BaseGraph baseGraph,
+                                        EncodingManager encodingManager, LocationIndex locationIndex, GtfsStorage gtfsStorage,
+                                        RealtimeFeed realtimeFeed, PathDetailsBuilderFactory pathDetailsBuilderFactory) {
+            return new PtRouterImpl(config, translationMap, baseGraph, encodingManager, locationIndex, gtfsStorage, realtimeFeed, pathDetailsBuilderFactory);
+        }
+
+        @Bean(PtRouteResource.FREE_WALK)
+        @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
+        public PtRouter freeWalkPtRouter(GraphHopperConfig config, TranslationMap translationMap, BaseGraph baseGraph,
+                                         EncodingManager encodingManager, LocationIndex locationIndex, GtfsStorage gtfsStorage,
+                                         RealtimeFeed realtimeFeed, PathDetailsBuilderFactory pathDetailsBuilderFactory) {
+            return new PtRouterFreeWalkImpl(config, translationMap, baseGraph, encodingManager, locationIndex, gtfsStorage, realtimeFeed, pathDetailsBuilderFactory);
+        }
+
+        @Bean(PtRouteResource.TRIP_BASED)
+        @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
+        public PtRouter tripBasedPtRouter(GraphHopper graphHopper, GraphHopperConfig config, TranslationMap translationMap, BaseGraph baseGraph,
+                                          EncodingManager encodingManager, LocationIndex locationIndex, GtfsStorage gtfsStorage,
+                                          PathDetailsBuilderFactory pathDetailsBuilderFactory) {
+            return new PtRouterTripBasedImpl(graphHopper, config, translationMap, baseGraph, encodingManager, locationIndex, gtfsStorage, pathDetailsBuilderFactory);
+        }
+    }
+
+    /**
+     * Matches if GTFS realtime feeds are configured.
+     */
+    static class RealtimeFeedsCondition implements Condition {
+        @Override
+        public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
+            ConfigurableBeanFactory beanFactory = context.getBeanFactory();
+            if (beanFactory == null)
+                return false;
+            String[] names = ((ListableBeanFactory) beanFactory).getBeanNamesForType(GraphHopperBundleConfiguration.class, false, false);
+            return names.length > 0 && !beanFactory.getBean(names[0], GraphHopperBundleConfiguration.class)
+                    .gtfsrealtime().getFeeds().isEmpty();
         }
     }
 }

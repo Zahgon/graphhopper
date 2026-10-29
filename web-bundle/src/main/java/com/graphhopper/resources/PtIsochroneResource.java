@@ -49,16 +49,20 @@ import org.locationtech.jts.triangulate.quadedge.QuadEdge;
 import org.locationtech.jts.triangulate.quadedge.QuadEdgeSubdivision;
 import org.locationtech.jts.triangulate.quadedge.Vertex;
 
-import jakarta.inject.Inject;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import jakarta.validation.constraints.NotNull;
-import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.MediaType;
 import java.time.Instant;
 import java.util.*;
 
 import static com.graphhopper.json.Statement.If;
 
-@Path("isochrone-pt")
+@RestController
+@RequestMapping("/isochrone-pt")
 public class PtIsochroneResource {
 
     private static final double JTS_TOLERANCE = 0.00001;
@@ -69,7 +73,6 @@ public class PtIsochroneResource {
     private final BaseGraph baseGraph;
     private final LocationIndex locationIndex;
 
-    @Inject
     public PtIsochroneResource(GraphHopperConfig config, GtfsStorage gtfsStorage, EncodingManager encodingManager, BaseGraph baseGraph, LocationIndex locationIndex) {
         this.config = config;
         this.gtfsStorage = gtfsStorage;
@@ -87,15 +90,15 @@ public class PtIsochroneResource {
         public Info info = new Info();
     }
 
-    @GET
-    @Produces({MediaType.APPLICATION_JSON})
+    @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Response doGet(
-            @QueryParam("point") GHLocationParam sourceParam,
-            @QueryParam("time_limit") @DefaultValue("600") long seconds,
-            @QueryParam("reverse_flow") @DefaultValue("false") boolean reverseFlow,
-            @QueryParam("pt.earliest_departure_time") @NotNull OffsetDateTimeParam departureTimeParam,
-            @QueryParam("pt.blocked_route_types") @DefaultValue("0") int blockedRouteTypes,
-            @QueryParam("result") @DefaultValue("multipolygon") String format) {
+            @RequestParam(name = "point", required = false) GHLocationParam sourceParam,
+            @RequestParam(name = "time_limit", defaultValue = "600") long seconds,
+            @RequestParam(name = "reverse_flow", defaultValue = "false") boolean reverseFlow,
+            @RequestParam(name = "pt.earliest_departure_time", required = false) @NotNull OffsetDateTimeParam departureTimeParam,
+            @RequestParam(name = "pt.blocked_route_types", defaultValue = "0") int blockedRouteTypes,
+            @RequestParam(name = "result", required = false) String format) {
+        format = format == null ? "multipolygon" : format;
         Instant initialTime = departureTimeParam.get().toInstant();
         GHLocation location = sourceParam.get();
 

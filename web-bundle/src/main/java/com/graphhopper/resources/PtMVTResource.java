@@ -14,22 +14,18 @@ import org.locationtech.jts.geom.util.AffineTransformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.UriInfo;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Path("pt-mvt")
-@Singleton
+@RestController
+@RequestMapping("/pt-mvt")
 public class PtMVTResource {
 
     private static final Logger logger = LoggerFactory.getLogger(PtMVTResource.class);
@@ -39,22 +35,17 @@ public class PtMVTResource {
     private final Map<ByteString, MatchResult> openLRCache = new ConcurrentHashMap<>();
     private final GeometryFactory geometryFactory = new GeometryFactory();
 
-    @Inject
     public PtMVTResource(GraphHopper graphHopper, GtfsStorage gtfsStorage) throws IOException {
         this.graphHopper = graphHopper;
         this.gtfsStorage = gtfsStorage;
     }
 
-    @GET
-    @Path("{z}/{x}/{y}.mvt")
-    @Produces("application/x-protobuf")
-    public Response doGetXyz(
-            @Context HttpServletRequest httpReq,
-            @Context UriInfo uriInfo,
-            @PathParam("z") int zInfo,
-            @PathParam("x") int xInfo,
-            @PathParam("y") int yInfo,
-            @QueryParam(Parameters.Details.PATH_DETAILS) List<String> pathDetails) {
+    @GetMapping(value = "/{z}/{x}/{y}.mvt", produces = "application/x-protobuf")
+    public ResponseEntity<byte[]> doGetXyz(
+            @PathVariable("z") int zInfo,
+            @PathVariable("x") int xInfo,
+            @PathVariable("y") int yInfo,
+            @RequestParam(name = Parameters.Details.PATH_DETAILS, required = false) List<String> pathDetails) {
 
         Coordinate nw = num2deg(xInfo, yInfo, zInfo);
         Coordinate se = num2deg(xInfo + 1, yInfo + 1, zInfo);
@@ -86,7 +77,7 @@ public class PtMVTResource {
                 }
             }
         });
-        return Response.ok(vectorTileEncoder.encode(), PBF).build();
+        return ResponseEntity.ok().contentType(PBF).body(vectorTileEncoder.encode());
     }
 
     Coordinate num2deg(int xInfo, int yInfo, int zoom) {

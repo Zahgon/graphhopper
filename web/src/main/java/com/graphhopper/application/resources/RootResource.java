@@ -18,17 +18,21 @@
 
 package com.graphhopper.application.resources;
 
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.UriBuilder;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-@Path("/")
+@RestController
 public class RootResource {
 
-    @GET
-    public Response redirectToWebapp() {
-        return Response.seeOther(UriBuilder.fromPath("maps/").build()).build();
+    @GetMapping("/")
+    public ResponseEntity<Void> redirectToWebapp(HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.SEE_OTHER)
+                .location(ServletUriComponentsBuilder.fromContextPath(request).path("/maps/").build().toUri())
+                .build();
     }
 
 }

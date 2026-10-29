@@ -28,6 +28,7 @@ import com.graphhopper.GraphHopperConfig;
 import com.graphhopper.ResponsePath;
 import com.graphhopper.gpx.GpxConversions;
 import com.graphhopper.http.ProfileResolver;
+import com.graphhopper.http.QueryParameters;
 import com.graphhopper.jackson.Gpx;
 import com.graphhopper.jackson.Jackson;
 import com.graphhopper.jackson.ResponsePathSerializer;
@@ -37,13 +38,12 @@ import com.graphhopper.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import jakarta.inject.Inject;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotNull;
-import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.Context;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.UriInfo;
 import java.util.*;
 
 import static com.graphhopper.resources.RouteResource.removeLegacyParameters;
@@ -55,7 +55,8 @@ import static com.graphhopper.util.Parameters.Routing.*;
  *
  * @author Peter Karich
  */
-@jakarta.ws.rs.Path("match")
+@RestController
+@RequestMapping("/match")
 public class MapMatchingResource {
 
     public interface MapMatchingRouterFactory {
@@ -72,7 +73,6 @@ public class MapMatchingResource {
     private final ObjectMapper objectMapper = Jackson.newObjectMapper();
     private final String osmDate;
 
-    @Inject
     public MapMatchingResource(GraphHopperConfig config, GraphHopper graphHopper, ProfileResolver profileResolver, TranslationMap trMap, MapMatchingRouterFactory mapMatchingRouterFactory) {
         this.config = config;
         this.graphHopper = graphHopper;
@@ -82,26 +82,28 @@ public class MapMatchingResource {
         this.osmDate = graphHopper.getProperties().getAll().get("datareader.data.date");
     }
 
-    @POST
-    @Consumes({MediaType.APPLICATION_XML, "application/gpx+xml"})
-    @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, "application/gpx+xml"})
-    public Response match(
-            @NotNull Gpx gpx,
-            @Context UriInfo uriInfo,
-            @QueryParam(WAY_POINT_MAX_DISTANCE) @DefaultValue("0.5") double minPathPrecision,
-            @QueryParam("type") @DefaultValue("json") String outType,
-            @QueryParam(INSTRUCTIONS) @DefaultValue("true") boolean instructions,
-            @QueryParam(CALC_POINTS) @DefaultValue("true") boolean calcPoints,
-            @QueryParam("elevation") @DefaultValue("false") boolean enableElevation,
-            @QueryParam("points_encoded") @DefaultValue("true") boolean pointsEncoded,
-            @QueryParam("points_encoded_multiplier") @DefaultValue("1e5") double pointsEncodedMultiplier,
-            @QueryParam("locale") @DefaultValue("en") String localeStr,
-            @QueryParam("profile") String profile,
-            @QueryParam(PATH_DETAILS) List<String> pathDetails,
-            @QueryParam("gpx.route") @DefaultValue("true") boolean withRoute,
-            @QueryParam("gpx.track") @DefaultValue("true") boolean withTrack,
-            @QueryParam("traversal_keys") @DefaultValue("false") boolean enableTraversalKeys,
-            @QueryParam("gps_accuracy") @DefaultValue("10") double gpsAccuracy) {
+    @PostMapping(consumes = {MediaType.APPLICATION_XML_VALUE, "application/gpx+xml"},
+            produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE, "application/gpx+xml"})
+    public ResponseEntity<?> match(
+            @RequestBody(required = false) @NotNull Gpx gpx,
+            HttpServletRequest httpReq,
+            @RequestParam(name = WAY_POINT_MAX_DISTANCE, defaultValue = "0.5") double minPathPrecision,
+            @RequestParam(name = "type", required = false) String outType,
+            @RequestParam(name = INSTRUCTIONS, defaultValue = "true") boolean instructions,
+            @RequestParam(name = CALC_POINTS, defaultValue = "true") boolean calcPoints,
+            @RequestParam(name = "elevation", defaultValue = "false") boolean enableElevation,
+            @RequestParam(name = "points_encoded", defaultValue = "true") boolean pointsEncoded,
+            @RequestParam(name = "points_encoded_multiplier", defaultValue = "1e5") double pointsEncodedMultiplier,
+            @RequestParam(name = "locale", required = false) String localeStr,
+            @RequestParam(name = "profile", required = false) String profile,
+            @RequestParam(name = PATH_DETAILS, required = false) List<String> pathDetails,
+            @RequestParam(name = "gpx.route", defaultValue = "true") boolean withRoute,
+            @RequestParam(name = "gpx.track", defaultValue = "true") boolean withTrack,
+            @RequestParam(name = "traversal_keys", defaultValue = "false") boolean enableTraversalKeys,
+            @RequestParam(name = "gps_accuracy", defaultValue = "10") double gpsAccuracy) {
+        outType = outType == null ? "json" : outType;
+        localeStr = localeStr == null ? "en" : localeStr;
+        pathDetails = pathDetails == null ? List.of() : pathDetails;
         boolean writeGPX = "gpx".equalsIgnoreCase(outType);
         if (gpx.trk.isEmpty()) {
             throw new IllegalArgumentException("No tracks found in GPX document. Are you using waypoints or routes instead?");
@@ -115,7 +117,7 @@ public class MapMatchingResource {
         StopWatch sw = new StopWatch().start();
 
         PMap hints = new PMap();
-        RouteResource.initHints(hints, uriInfo.getQueryParameters());
+        RouteResource.initHints(hints, QueryParameters.parse(httpReq.getQueryString()));
 
         // resolve profile and remove legacy vehicle/weighting parameters
         // we need to explicitly disable CH here because map matching does not use it
@@ -143,13 +145,13 @@ public class MapMatchingResource {
                 .put("distance", matchResult.getMatchLength()).toString());
 
         if (debugMode) {
-            return Response.ok(matching.getDebugInfo()).
+            return ResponseEntity.ok().
                     header("X-GH-Took", "" + Math.round(sw.getMillisDouble())).
-                    build();
+                    body(matching.getDebugInfo());
         } else if ("extended_json".equals(outType)) {
-            return Response.ok(convertToTree(matchResult, enableElevation, pointsEncoded, pointsEncodedMultiplier)).
+            return ResponseEntity.ok().
                     header("X-GH-Took", "" + Math.round(sw.getMillisDouble())).
-                    build();
+                    body(convertToTree(matchResult, enableElevation, pointsEncoded, pointsEncodedMultiplier));
         } else {
             Translation tr = trMap.getWithFallBack(Helper.getLocale(localeStr));
             RamerDouglasPeucker simplifyAlgo = new RamerDouglasPeucker().setMaxDistance(minPathPrecision);
@@ -172,9 +174,10 @@ public class MapMatchingResource {
                 long time = gpx.trk.get(0).getStartTime()
                         .map(Date::getTime)
                         .orElse(System.currentTimeMillis());
-                return Response.ok(GpxConversions.createGPX(rsp.getBest().getInstructions(), gpx.trk.get(0).name != null ? gpx.trk.get(0).name : "", time, enableElevation, withRoute, withTrack, false, Constants.VERSION, tr), "application/gpx+xml").
+                return ResponseEntity.ok().
+                        contentType(MediaType.parseMediaType("application/gpx+xml")).
                         header("X-GH-Took", "" + Math.round(sw.getMillisDouble())).
-                        build();
+                        body(GpxConversions.createGPX(rsp.getBest().getInstructions(), gpx.trk.get(0).name != null ? gpx.trk.get(0).name : "", time, enableElevation, withRoute, withTrack, false, Constants.VERSION, tr));
             } else {
                 ObjectNode map = ResponsePathSerializer.jsonObject(rsp, new ResponsePathSerializer.Info(config.getCopyrights(), Math.round(sw.getMillisDouble()), osmDate), instructions,
                         calcPoints, enableElevation, pointsEncoded, pointsEncodedMultiplier);
@@ -194,9 +197,9 @@ public class MapMatchingResource {
                     }
                     map.putPOJO("traversal_keys", traversalKeylist);
                 }
-                return Response.ok(map).
+                return ResponseEntity.ok().
                         header("X-GH-Took", "" + Math.round(sw.getMillisDouble())).
-                        build();
+                        body(map);
             }
         }
     }

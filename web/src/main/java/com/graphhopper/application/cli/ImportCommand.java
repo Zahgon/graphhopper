@@ -20,18 +20,16 @@ package com.graphhopper.application.cli;
 
 import com.graphhopper.application.GraphHopperServerConfiguration;
 import com.graphhopper.http.GraphHopperManaged;
-import io.dropwizard.core.cli.ConfiguredCommand;
-import io.dropwizard.core.setup.Bootstrap;
 import net.sourceforge.argparse4j.inf.Namespace;
 
-public class ImportCommand extends ConfiguredCommand<GraphHopperServerConfiguration> {
+public class ImportCommand extends ConfiguredCommand {
 
     public ImportCommand() {
         super("import", "creates the graphhopper files used for later (faster) starts");
     }
 
     @Override
-    protected void run(Bootstrap<GraphHopperServerConfiguration> bootstrap, Namespace namespace, GraphHopperServerConfiguration configuration) {
+    protected void run(Namespace namespace, GraphHopperServerConfiguration configuration) {
         final GraphHopperManaged graphHopper = new GraphHopperManaged(configuration.getGraphHopperConfiguration());
         graphHopper.getGraphHopper().importAndClose();
     }

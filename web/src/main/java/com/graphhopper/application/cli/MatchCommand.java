@@ -29,8 +29,6 @@ import com.graphhopper.matching.MapMatching;
 import com.graphhopper.matching.MatchResult;
 import com.graphhopper.matching.Observation;
 import com.graphhopper.util.*;
-import io.dropwizard.core.cli.ConfiguredCommand;
-import io.dropwizard.core.setup.Bootstrap;
 import net.sourceforge.argparse4j.inf.Argument;
 import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
@@ -42,7 +40,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
-public class MatchCommand extends ConfiguredCommand<GraphHopperServerConfiguration> {
+public class MatchCommand extends ConfiguredCommand {
 
     public MatchCommand() {
         super("match", "map-match one or more gpx files");
@@ -83,12 +81,12 @@ public class MatchCommand extends ConfiguredCommand<GraphHopperServerConfigurati
         // In this command, we want the configuration file parameter to be a named argument,
         // not a positional argument, because the positional arguments are the gpx files,
         // and we configure it up there ^^.
-        // Must be called "file" because superclass gets it by name.
+        // Must be called "file" because the superclass gets it by name.
         throw new RuntimeException();
     }
 
     @Override
-    protected void run(Bootstrap<GraphHopperServerConfiguration> bootstrap, Namespace args, GraphHopperServerConfiguration configuration) {
+    protected void run(Namespace args, GraphHopperServerConfiguration configuration) {
         GraphHopperConfig graphHopperConfiguration = configuration.getGraphHopperConfiguration();
 
         GraphHopper hopper = new GraphHopper().init(graphHopperConfiguration);

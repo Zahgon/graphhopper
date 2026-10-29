@@ -21,11 +21,13 @@ package com.graphhopper.http;
 import com.graphhopper.GraphHopper;
 import com.graphhopper.GraphHopperConfig;
 import com.graphhopper.gtfs.GraphHopperGtfs;
-import io.dropwizard.lifecycle.Managed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class GraphHopperManaged implements Managed {
+/**
+ * The GraphHopper instance of the application: imports or loads the graph on start and closes it on stop.
+ */
+public class GraphHopperManaged {
 
     private final static Logger logger = LoggerFactory.getLogger(GraphHopperManaged.class);
     private final GraphHopper graphHopper;
@@ -39,7 +41,6 @@ public class GraphHopperManaged implements Managed {
         graphHopper.init(configuration);
     }
 
-    @Override
     public void start() {
         graphHopper.importOrLoad();
         logger.info("loaded graph at:{}, data_reader_file:{}, encoded values:{}, {} bytes for edge flags, {}",
@@ -53,7 +54,6 @@ public class GraphHopperManaged implements Managed {
         return graphHopper;
     }
 
-    @Override
     public void stop() {
         graphHopper.close();
     }

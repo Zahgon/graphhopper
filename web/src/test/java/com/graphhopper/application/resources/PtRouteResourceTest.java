@@ -17,6 +17,9 @@
  */
 package com.graphhopper.application.resources;
 
+import com.graphhopper.application.util.GraphHopperAppExtension;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import com.graphhopper.application.util.ClientResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.graphhopper.GHResponse;
 import com.graphhopper.application.GraphHopperApplication;
@@ -28,14 +31,10 @@ import com.graphhopper.resources.InfoResource;
 import com.graphhopper.routing.TestProfiles;
 import com.graphhopper.util.BodyAndStatus;
 import com.graphhopper.util.Helper;
-import io.dropwizard.testing.junit5.DropwizardAppExtension;
-import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
-import jakarta.ws.rs.core.Response;
 import java.io.File;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -48,10 +47,10 @@ import static org.junit.jupiter.api.Assertions.*;
  * Tests the entire app, not the resource, so that the plugging-together
  * of stuff (which is different for PT than for the rest) is under test, too.
  */
-@ExtendWith(DropwizardExtensionsSupport.class)
 public class PtRouteResourceTest {
     private static final String DIR = "./target/gtfs-app-gh/";
-    public static final DropwizardAppExtension<GraphHopperServerConfiguration> app = new DropwizardAppExtension<>(GraphHopperApplication.class, createConfig());
+    @RegisterExtension
+    static final GraphHopperAppExtension app = new GraphHopperAppExtension(createConfig());
 
     private static GraphHopperServerConfiguration createConfig() {
         GraphHopperServerConfiguration config = new GraphHopperServerTestConfiguration();
@@ -173,7 +172,7 @@ public class PtRouteResourceTest {
 
     @Test
     public void testProfileQuery() {
-        final Response response = clientTarget(app, "/route")
+        final ClientResponse response = clientTarget(app, "/route")
                 .queryParam("point", "36.91311729030539,-116.76769495010377")
                 .queryParam("point", "36.91260259593356,-116.76149368286134")
                 .queryParam("profile", "pt")

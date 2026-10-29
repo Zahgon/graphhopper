@@ -18,7 +18,6 @@
 
 package com.graphhopper.http;
 
-import io.dropwizard.jersey.params.AbstractParam;
 
 import java.time.OffsetDateTime;
 

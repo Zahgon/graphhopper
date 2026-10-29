@@ -22,23 +22,24 @@ import com.graphhopper.GHResponse;
 import com.graphhopper.GraphHopper;
 import com.graphhopper.GraphHopperConfig;
 import com.graphhopper.gpx.GpxConversions;
+import com.graphhopper.http.AbstractParam;
 import com.graphhopper.http.GHPointParam;
 import com.graphhopper.http.GHRequestTransformer;
 import com.graphhopper.http.ProfileResolver;
+import com.graphhopper.http.QueryParameters;
 import com.graphhopper.jackson.MultiException;
 import com.graphhopper.jackson.ResponsePathSerializer;
 import com.graphhopper.util.*;
 import com.graphhopper.util.shapes.GHPoint;
-import io.dropwizard.jersey.params.AbstractParam;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import jakarta.inject.Inject;
-import jakarta.inject.Named;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotNull;
-import jakarta.ws.rs.*;
-import jakarta.ws.rs.core.*;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -54,8 +55,11 @@ import static java.util.stream.Collectors.toList;
  *
  * @author Peter Karich
  */
-@Path("route")
+@RestController
+@RequestMapping("/route")
 public class RouteResource {
+
+    private static final MediaType GPX = MediaType.parseMediaType("application/gpx+xml");
 
     private static final Logger logger = LoggerFactory.getLogger(RouteResource.class);
 
@@ -67,8 +71,7 @@ public class RouteResource {
     private final String osmDate;
     private final List<String> snapPreventionsDefault;
 
-    @Inject
-    public RouteResource(GraphHopperConfig config, GraphHopper graphHopper, ProfileResolver profileResolver, GHRequestTransformer ghRequestTransformer, @Named("hasElevation") Boolean hasElevation) {
+    public RouteResource(GraphHopperConfig config, GraphHopper graphHopper, ProfileResolver profileResolver, GHRequestTransformer ghRequestTransformer, @Qualifier("hasElevation") Boolean hasElevation) {
         this.config = config;
         this.graphHopper = graphHopper;
         this.profileResolver = profileResolver;
@@ -79,42 +82,51 @@ public class RouteResource {
                 .split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
     }
 
-    @GET
-    @Produces({MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, "application/gpx+xml"})
-    public Response doGet(
-            @Context HttpServletRequest httpReq,
-            @Context UriInfo uriInfo,
-            @QueryParam(WAY_POINT_MAX_DISTANCE) @DefaultValue("0.5") double minPathPrecision,
-            @QueryParam(ELEVATION_WAY_POINT_MAX_DISTANCE) Double minPathElevationPrecision,
-            @QueryParam("point") @NotNull List<GHPointParam> pointParams,
-            @QueryParam("type") @DefaultValue("json") String type,
-            @QueryParam(INSTRUCTIONS) @DefaultValue("true") boolean instructions,
-            @QueryParam(CALC_POINTS) @DefaultValue("true") boolean calcPoints,
-            @QueryParam("elevation") @DefaultValue("false") boolean enableElevation,
-            @QueryParam("points_encoded") @DefaultValue("true") boolean pointsEncoded,
-            @QueryParam("points_encoded_multiplier") @DefaultValue("1e5") double pointsEncodedMultiplier,
-            @QueryParam("profile") String profileName,
-            @QueryParam(ALGORITHM) @DefaultValue("") String algoStr,
-            @QueryParam("locale") @DefaultValue("en") String localeStr,
-            @QueryParam(POINT_HINT) List<String> pointHints,
-            @QueryParam(CURBSIDE) List<String> curbsides,
-            @QueryParam(SNAP_PREVENTION) List<String> snapPreventions,
-            @QueryParam(PATH_DETAILS) List<String> pathDetails,
-            @QueryParam("heading") @NotNull List<Double> headings,
-            @QueryParam("gpx.route") @DefaultValue("true") boolean withRoute /* default to false for the route part in next API version, see #437 */,
-            @QueryParam("gpx.track") @DefaultValue("true") boolean withTrack,
-            @QueryParam("gpx.waypoints") @DefaultValue("false") boolean withWayPoints,
-            @QueryParam("gpx.trackname") @DefaultValue("GraphHopper Track") String trackName,
-            @QueryParam("gpx.millis") String timeString) {
+    @GetMapping(produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE, "application/gpx+xml"})
+    public ResponseEntity<?> doGet(
+            HttpServletRequest httpReq,
+            @RequestParam(name = WAY_POINT_MAX_DISTANCE, defaultValue = "0.5") double minPathPrecision,
+            @RequestParam(name = ELEVATION_WAY_POINT_MAX_DISTANCE, required = false) Double minPathElevationPrecision,
+            @RequestParam(name = "point", required = false) List<GHPointParam> pointParams,
+            @RequestParam(name = "type", required = false) String type,
+            @RequestParam(name = INSTRUCTIONS, defaultValue = "true") boolean instructions,
+            @RequestParam(name = CALC_POINTS, defaultValue = "true") boolean calcPoints,
+            @RequestParam(name = "elevation", defaultValue = "false") boolean enableElevation,
+            @RequestParam(name = "points_encoded", defaultValue = "true") boolean pointsEncoded,
+            @RequestParam(name = "points_encoded_multiplier", defaultValue = "1e5") double pointsEncodedMultiplier,
+            @RequestParam(name = "profile", required = false) String profileName,
+            @RequestParam(name = ALGORITHM, required = false) String algoStr,
+            @RequestParam(name = "locale", required = false) String localeStr,
+            @RequestParam(name = POINT_HINT, required = false) List<String> pointHints,
+            @RequestParam(name = CURBSIDE, required = false) List<String> curbsides,
+            @RequestParam(name = SNAP_PREVENTION, required = false) List<String> snapPreventions,
+            @RequestParam(name = PATH_DETAILS, required = false) List<String> pathDetails,
+            @RequestParam(name = "heading", required = false) List<Double> headings,
+            @RequestParam(name = "gpx.route", defaultValue = "true") boolean withRoute /* default to false for the route part in next API version, see #437 */,
+            @RequestParam(name = "gpx.track", defaultValue = "true") boolean withTrack,
+            @RequestParam(name = "gpx.waypoints", defaultValue = "false") boolean withWayPoints,
+            @RequestParam(name = "gpx.trackname", required = false) String trackName,
+            @RequestParam(name = "gpx.millis", required = false) String timeString) {
         StopWatch sw = new StopWatch().start();
-        List<GHPoint> points = pointParams.stream().map(AbstractParam::get).collect(toList());
+        // absent parameters: an empty value is passed on as it is, absent lists are empty
+        type = type == null ? "json" : type;
+        algoStr = algoStr == null ? "" : algoStr;
+        localeStr = localeStr == null ? "en" : localeStr;
+        trackName = trackName == null ? "GraphHopper Track" : trackName;
+        pointHints = orEmpty(pointHints);
+        curbsides = orEmpty(curbsides);
+        snapPreventions = orEmpty(snapPreventions);
+        pathDetails = orEmpty(pathDetails);
+        headings = orEmpty(headings);
+        Map<String, List<String>> queryParameters = QueryParameters.parse(httpReq.getQueryString());
+        List<GHPoint> points = orEmpty(pointParams).stream().map(AbstractParam::get).collect(toList());
         boolean writeGPX = "gpx".equalsIgnoreCase(type);
         instructions = writeGPX || instructions;
         if (enableElevation && !hasElevation)
             throw new IllegalArgumentException("Elevation not supported!");
 
         GHRequest request = new GHRequest();
-        initHints(request.getHints(), uriInfo.getQueryParameters());
+        initHints(request.getHints(), queryParameters);
 
         if (minPathElevationPrecision != null)
             request.getHints().putObject(ELEVATION_WAY_POINT_MAX_DISTANCE, minPathElevationPrecision);
@@ -132,7 +144,7 @@ public class RouteResource {
                 putObject(INSTRUCTIONS, instructions).
                 putObject(WAY_POINT_MAX_DISTANCE, minPathPrecision);
 
-        if (uriInfo.getQueryParameters().containsKey(SNAP_PREVENTION)) {
+        if (queryParameters.containsKey(SNAP_PREVENTION)) {
             if (snapPreventions.size() == 1 && snapPreventions.contains(""))
                 request.setSnapPreventions(List.of()); // e.g. "&snap_prevention=&" to force empty list
             else
@@ -158,10 +170,9 @@ public class RouteResource {
 
         if (ghResponse.hasErrors()) {
             logger.info(logStr + " " + ghResponse);
-            return Response.status(Response.Status.BAD_REQUEST).
-                    entity(new MultiException(ghResponse.getErrors())).
-                    type(writeGPX ? "application/gpx+xml" : MediaType.APPLICATION_JSON).
-                    build();
+            return ResponseEntity.badRequest().
+                    contentType(writeGPX ? GPX : MediaType.APPLICATION_JSON).
+                    body(new MultiException(ghResponse.getErrors()));
         } else {
             logger.info(logStr + ", alternatives: " + ghResponse.getAll().size()
                     + ", distance0: " + ghResponse.getBest().getDistance()
@@ -170,21 +181,17 @@ public class RouteResource {
                     + ", points0: " + ghResponse.getBest().getPoints().size()
                     + ", debugInfo: " + ghResponse.getDebugInfo());
             return writeGPX ?
-                    gpxSuccessResponseBuilder(ghResponse, timeString, trackName, enableElevation, withRoute, withTrack, withWayPoints, Constants.VERSION).
-                            header("X-GH-Took", "" + Math.round(took)).
-                            build()
+                    gpxSuccessResponseBuilder(ghResponse, timeString, trackName, enableElevation, withRoute, withTrack, withWayPoints, Constants.VERSION, Math.round(took))
                     :
-                    Response.ok(ResponsePathSerializer.jsonObject(ghResponse, new ResponsePathSerializer.Info(config.getCopyrights(), Math.round(took), osmDate), instructions, calcPoints, enableElevation, pointsEncoded, pointsEncodedMultiplier)).
+                    ResponseEntity.ok().
                             header("X-GH-Took", "" + Math.round(took)).
-                            type(MediaType.APPLICATION_JSON).
-                            build();
+                            contentType(MediaType.APPLICATION_JSON).
+                            body(ResponsePathSerializer.jsonObject(ghResponse, new ResponsePathSerializer.Info(config.getCopyrights(), Math.round(took), osmDate), instructions, calcPoints, enableElevation, pointsEncoded, pointsEncodedMultiplier));
         }
     }
 
-    @POST
-    @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
-    public Response doPost(@NotNull GHRequest request, @Context HttpServletRequest httpReq) {
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> doPost(@RequestBody(required = false) @NotNull GHRequest request, HttpServletRequest httpReq) {
         if (!request.hasSnapPreventions())
             request.setSnapPreventions(snapPreventionsDefault);
 
@@ -223,10 +230,10 @@ public class RouteResource {
                     + ", time0: " + Math.round(ghResponse.getBest().getTime() / 60000f) + "min"
                     + ", points0: " + ghResponse.getBest().getPoints().size()
                     + ", debugInfo: " + ghResponse.getDebugInfo());
-            return Response.ok(ResponsePathSerializer.jsonObject(ghResponse, new ResponsePathSerializer.Info(config.getCopyrights(), Math.round(took), osmDate), instructions, calcPoints, enableElevation, pointsEncoded, pointsEncodedMultiplier)).
+            return ResponseEntity.ok().
                     header("X-GH-Took", "" + Math.round(took)).
-                    type(MediaType.APPLICATION_JSON).
-                    build();
+                    contentType(MediaType.APPLICATION_JSON).
+                    body(ResponsePathSerializer.jsonObject(ghResponse, new ResponsePathSerializer.Info(config.getCopyrights(), Math.round(took), osmDate), instructions, calcPoints, enableElevation, pointsEncoded, pointsEncodedMultiplier));
         }
     }
 
@@ -238,19 +245,26 @@ public class RouteResource {
         hints.remove("turn_costs");
     }
 
-    private static Response.ResponseBuilder gpxSuccessResponseBuilder(GHResponse ghRsp, String timeString, String
-            trackName, boolean enableElevation, boolean withRoute, boolean withTrack, boolean withWayPoints, String version) {
+    private static ResponseEntity<String> gpxSuccessResponseBuilder(GHResponse ghRsp, String timeString, String
+            trackName, boolean enableElevation, boolean withRoute, boolean withTrack, boolean withWayPoints, String version, long took) {
         if (ghRsp.getAll().size() > 1) {
             throw new IllegalArgumentException("Alternatives are currently not yet supported for GPX");
         }
 
         long time = timeString != null ? Long.parseLong(timeString) : System.currentTimeMillis();
         InstructionList instructions = ghRsp.getBest().getInstructions();
-        return Response.ok(GpxConversions.createGPX(instructions, trackName, time, enableElevation, withRoute, withTrack, withWayPoints, version, instructions.getTr()), "application/gpx+xml").
-                header("Content-Disposition", "attachment;filename=" + "GraphHopper.gpx");
+        return ResponseEntity.ok().
+                contentType(GPX).
+                header("Content-Disposition", "attachment;filename=" + "GraphHopper.gpx").
+                header("X-GH-Took", "" + took).
+                body(GpxConversions.createGPX(instructions, trackName, time, enableElevation, withRoute, withTrack, withWayPoints, version, instructions.getTr()));
     }
 
-    static void initHints(PMap m, MultivaluedMap<String, String> parameterMap) {
+    private static <T> List<T> orEmpty(List<T> list) {
+        return list == null ? List.of() : list;
+    }
+
+    static void initHints(PMap m, Map<String, List<String>> parameterMap) {
         for (Map.Entry<String, List<String>> e : parameterMap.entrySet()) {
             if (e.getValue().size() == 1) {
                 m.putObject(Helper.camelCaseToUnderScore(e.getKey()), Helper.toObject(e.getValue().get(0)));
